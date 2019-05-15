@@ -51,6 +51,8 @@ private class LlvmPipelineConfiguration(context: Context) {
         KonanTarget.IOS_ARM32 -> "generic"
         KonanTarget.IOS_ARM64 -> "cyclone"
         KonanTarget.IOS_X64 -> "core2"
+        KonanTarget.TVOS_ARM64 -> "cyclone"
+        KonanTarget.TVOS_X64 -> "core2"
         KonanTarget.LINUX_X64 -> "x86-64"
         KonanTarget.MINGW_X86 -> "pentium4"
         KonanTarget.MINGW_X64 -> "x86-64"

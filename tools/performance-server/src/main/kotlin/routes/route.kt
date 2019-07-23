@@ -18,6 +18,7 @@ import org.w3c.xhr.*
 import kotlin.js.json
 import kotlin.js.Date
 import org.jetbrains.report.json.*
+import org.jetbrains.influxdb.*
 import org.jetbrains.build.Build
 
 const val teamCityUrl = "https://buildserver.labs.intellij.net/app/rest"
@@ -221,6 +222,11 @@ fun buildDescriptionToTokens(buildDescription: String): List<String> {
     return tokens
 }
 
+class ExecutionTime() : Measurement("exec_time") {
+    var score by Field<Double>()
+    var benchmarkName by Tag<String>()
+}
+
 // Routing of requests to current server.
 fun router() {
     val express = require("express")
@@ -329,6 +335,14 @@ fun router() {
     // Main page.
     router.get("/", { _, response ->
         response.render("index")
+    })
+
+    router.get("/test", { _, response ->
+        InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native", user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
+        val executionTime = ExecutionTime()
+        executionTime.benchmarkName = "Bench"
+        executionTime.score = 1.01
+        response.sendStatus(200)
     })
 
     return router

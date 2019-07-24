@@ -119,18 +119,13 @@ data class BuildInfo(val buildNumber: String, val branch: String, val startTime:
                      val finishTime: String)
 
 data class BuildRegister(val buildId: String, val teamCityUser: String, val teamCityPassword: String,
-                    val bintrayUser: String, val bintrayPassword: String,
-                    val target: String, val buildType: String, val failuresNumber: Int,
-                    val executionTime: String, val compileTime: String, val codeSize: String,
                     val bundleSize: String?) {
     companion object {
         fun create(json: String): BuildRegister {
             val requestDetails = JSON.parse<BuildRegister>(json)
             // Parse method doesn't create real instance with all methods. So create it by hands.
             return BuildRegister(requestDetails.buildId, requestDetails.teamCityUser, requestDetails.teamCityPassword,
-                    requestDetails.bintrayUser, requestDetails.bintrayPassword, requestDetails.target,
-                    requestDetails.buildType, requestDetails.failuresNumber, requestDetails.executionTime, requestDetails.compileTime,
-                    requestDetails.codeSize, requestDetails.bundleSize)
+                    requestDetails.bundleSize)
         }
     }
 
@@ -140,7 +135,7 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
         "$teamCityUrl/changes/?locator=build:id:$buildId"
     }
 
-    private fun sendTeamCityRequest(url: String) = sendGetRequest(url, teamCityUser, teamCityPassword)
+    private fun sendTeamCityRequest(url: String) = sendRequest(RequestMethod.GET, url, teamCityUser, teamCityPassword)
 
     private fun format(timeValue: Int): String =
             if (timeValue < 10) "0$timeValue" else "$timeValue"
@@ -149,46 +144,26 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
         val buildNumber = sendTeamCityRequest("$teamCityBuildUrl/number")
         val branch = sendTeamCityRequest("$teamCityBuildUrl/branchName")
         val startTime = sendTeamCityRequest("$teamCityBuildUrl/startDate")
-        val currentTime = Date()
-        val timeZone = currentTime.getTimezoneOffset() / -60    // Convert to hours.
-        // Get finish time as current time, because buid on TeamCity isn't finished.
-        val finishTime = "${format(currentTime.getUTCFullYear())}" +
-                "${format(currentTime.getUTCMonth() + 1)}" +
-                "${format(currentTime.getUTCDate())}" +
-                "T${format(currentTime.getUTCHours())}" +
-                "${format(currentTime.getUTCMinutes())}" +
-                "${format(currentTime.getUTCSeconds())}" +
-                "${if (timeZone > 0) "+" else "-"}${format(timeZone)}${format(0)}"
-        return BuildInfo(buildNumber, branch, startTime, finishTime)
-    }
-}
-
-data class Commit(val revision: String, val developer: String)
-
-// List of commits.
-class CommitsList(data: JsonElement): ConvertedFromJson {
-
-    val commits: List<Commit>
-
-    init {
-        if (data !is JsonObject) {
-            error("Commits description is expected to be a json object!")
+        return Promise.all(arrayOf(sendTeamCityRequest("$teamCityBuildUrl/number"),
+                sendTeamCityRequest("$teamCityBuildUrl/branchName"),
+                sendTeamCityRequest("$teamCityBuildUrl/startDate"))).then { results ->
+            val (buildNumber, branch, startTime) = results
+            val currentTime = Date()
+            val timeZone = currentTime.getTimezoneOffset() / -60    // Convert to hours.
+            // Get finish time as current time, because buid on TeamCity isn't finished.
+            val finishTime = "${format(currentTime.getUTCFullYear())}" +
+                    "${format(currentTime.getUTCMonth() + 1)}" +
+                    "${format(currentTime.getUTCDate())}" +
+                    "T${format(currentTime.getUTCHours())}" +
+                    "${format(currentTime.getUTCMinutes())}" +
+                    "${format(currentTime.getUTCSeconds())}" +
+                    "${if (timeZone > 0) "+" else "-"}${format(timeZone)}${format(0)}"
+            BuildInfo(buildNumber, branch, startTime, finishTime)
         }
-        val changesElement = data.getOptionalField("change")
-        commits = changesElement?.let {
-            if (changesElement !is JsonArray) {
-                error("Change field is expected to be an array. Please, check source.")
-            }
-            changesElement.jsonArray.map {
-                with(it as JsonObject) {
-                    Commit(elementToString(getRequiredField("version"), "version"),
-                            elementToString(getRequiredField("username"), "username")
-                    )
-                }
-            }
-        } ?: listOf<Commit>()
     }
 }
+
+
 
 fun getBuildsInfoFromBintray(target: String) =
         sendGetRequest("$downloadBintrayUrl/$target/$buildsFileName")
@@ -222,15 +197,56 @@ fun buildDescriptionToTokens(buildDescription: String): List<String> {
     return tokens
 }
 
-class ExecutionTime() : Measurement("exec_time") {
-    var score by Field<Double>()
-    var benchmarkName by Tag<String>()
-}
-
 // Routing of requests to current server.
 fun router() {
     val express = require("express")
     val router = express.Router()
+
+    // Register build on Bintray.
+    router.post("/registerTCBuild", { request, response ->
+        val register = BuildRegister.create(JSON.stringify(request.body))
+
+        // Get information from TeamCity.
+        register.getBuildInformation().then { buildInfo ->
+            sendRequest(RequestMethod.GET, register.changesListUrl)
+            //val changes = sendGetRequest(register.changesListUrl, register.teamCityUser,
+                    register.teamCityPassword, true)
+            val commitsList = CommitsList(JsonTreeParser.parse(changes))
+            val commitsDescription = buildString {
+                if (commitsList.commits.size > maxCommitsNumber) {
+                    append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
+                    append("${commitsList.commits.get(1).revision} by ${commitsList.commits.get(1).developer};")
+                    append("...;")
+                    val beforeLast = commitsList.commits.lastIndex - 1
+                    append("${commitsList.commits.get(beforeLast).revision} by ${commitsList.commits.get(beforeLast).developer};")
+                    append("${commitsList.commits.last().revision} by ${commitsList.commits.last().developer};")
+                } else {
+                    commitsList.commits.forEach {
+                        append("${it.revision} by ${it.developer};")
+                    }
+                }
+            }
+
+            // Get summary file from Bintray.
+            var buildsDescription = getBuildsInfoFromBintray(register.target)
+            // Add information about new build.
+            //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
+            buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
+                    "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
+                    "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
+                    "${register.bundleSize ?: "-"}\n"
+
+            // Upload new version of file.
+            val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/${register.target}/${buildsFileName}?publish=1&override=1"
+            sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
+
+            LocalCache.clean(register.target)
+            LocalCache.fill(register.target)
+
+            // Send response.
+            response.sendStatus(200)
+        }
+    })
 
     // Register build on Bintray.
     router.post("/register", { request, response ->
@@ -340,8 +356,7 @@ fun router() {
     router.get("/test", { _, response ->
         InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native", user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
         val executionTime = ExecutionTime()
-        executionTime.benchmarkName = "Bench"
-        executionTime.score = 1.01
+
         response.sendStatus(200)
     })
 
@@ -354,8 +369,13 @@ fun getAuth(user: String, password: String): String {
     return "Basic " + based64String
 }
 
-fun sendGetRequest(url: String, user: String? = null, password: String? = null, jsonContentType: Boolean = false) : String {
-    val request = require("sync-request")
+enum class RequestMethod {
+    POST, GET, PUT
+}
+
+fun sendRequest(method: RequestMethod, url: String, user: String? = null, password: String? = null,
+                jsonContentType: Boolean = false, body: String? = null) : String {
+    val request = require("node-fetch")
     val headers = mutableListOf<Pair<String, String>>()
     if (user != null && password != null) {
         headers.add("Authorization" to getAuth(user, password))
@@ -363,17 +383,19 @@ fun sendGetRequest(url: String, user: String? = null, password: String? = null, 
     if (jsonContentType) {
         headers.add("Accept" to "application/json")
     }
-    val response = request("GET", url,
+    return request(url,
             json(
-                "headers" to json(*(headers.toTypedArray()))
+                    "method" to method,
+                    "headers" to json(*(headers.toTypedArray())),
+                    "body" to body
             )
-    )
-    if (response.statusCode != 200) {
-        error("Error during getting response from $url\n" +
-                "${response.getBody()}")
+    ).then { response ->
+        if (response.statusCode != 200)
+            error("Error during getting response from $url\n" +
+                    "${response.text()}")
+        else
+            response.text()
     }
-
-    return response.getBody().toString()
 }
 
 fun sendUploadRequest(url: String, fileContent: String, user: String? = null, password: String? = null) {

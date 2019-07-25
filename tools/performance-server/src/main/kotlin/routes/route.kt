@@ -208,43 +208,44 @@ fun router() {
 
         // Get information from TeamCity.
         register.getBuildInformation().then { buildInfo ->
-            sendRequest(RequestMethod.GET, register.changesListUrl)
-            //val changes = sendGetRequest(register.changesListUrl, register.teamCityUser,
-                    register.teamCityPassword, true)
-            val commitsList = CommitsList(JsonTreeParser.parse(changes))
-            val commitsDescription = buildString {
-                if (commitsList.commits.size > maxCommitsNumber) {
-                    append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
-                    append("${commitsList.commits.get(1).revision} by ${commitsList.commits.get(1).developer};")
-                    append("...;")
-                    val beforeLast = commitsList.commits.lastIndex - 1
-                    append("${commitsList.commits.get(beforeLast).revision} by ${commitsList.commits.get(beforeLast).developer};")
-                    append("${commitsList.commits.last().revision} by ${commitsList.commits.last().developer};")
-                } else {
-                    commitsList.commits.forEach {
-                        append("${it.revision} by ${it.developer};")
+            sendRequest(RequestMethod.GET, register.changesListUrl, register.teamCityUser,
+                    register.teamCityPassword, true).then { changes ->
+
+                val commitsList = CommitsList(JsonTreeParser.parse(changes))
+                /*val commitsDescription = buildString {
+                    if (commitsList.commits.size > maxCommitsNumber) {
+                        append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
+                        append("${commitsList.commits.get(1).revision} by ${commitsList.commits.get(1).developer};")
+                        append("...;")
+                        val beforeLast = commitsList.commits.lastIndex - 1
+                        append("${commitsList.commits.get(beforeLast).revision} by ${commitsList.commits.get(beforeLast).developer};")
+                        append("${commitsList.commits.last().revision} by ${commitsList.commits.last().developer};")
+                    } else {
+                        commitsList.commits.forEach {
+                            append("${it.revision} by ${it.developer};")
+                        }
                     }
-                }
+                }*/
+
+                // Get summary file from Bintray.
+                var buildsDescription = getBuildsInfoFromBintray(register.target)
+                // Add information about new build.
+                //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
+                buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
+                        "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
+                        "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
+                        "${register.bundleSize ?: "-"}\n"
+
+                // Upload new version of file.
+                val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/${register.target}/${buildsFileName}?publish=1&override=1"
+                sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
+
+                LocalCache.clean(register.target)
+                LocalCache.fill(register.target)
+
+                // Send response.
+                response.sendStatus(200)
             }
-
-            // Get summary file from Bintray.
-            var buildsDescription = getBuildsInfoFromBintray(register.target)
-            // Add information about new build.
-            //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
-            buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
-                    "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
-                    "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
-                    "${register.bundleSize ?: "-"}\n"
-
-            // Upload new version of file.
-            val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/${register.target}/${buildsFileName}?publish=1&override=1"
-            sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
-
-            LocalCache.clean(register.target)
-            LocalCache.fill(register.target)
-
-            // Send response.
-            response.sendStatus(200)
         }
     })
 

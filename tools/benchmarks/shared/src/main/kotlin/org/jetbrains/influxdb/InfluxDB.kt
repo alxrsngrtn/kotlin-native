@@ -34,6 +34,33 @@ open class Measurement(val name: String) {
             return tag
         }
     }
+
+    private val description by lazy {
+        with(StringBuilder("$name,")) {
+            var prefix = ""
+            tags.forEach {
+                append("${prefix}${it.name}=${it.value}")
+                prefix = ","
+            }
+            prefix = " "
+            fields.forEach {
+                append("${prefix}${it.name}=${it.value}")
+                prefix = ","
+            }
+            timestamp?.let {
+                append(" $timestamp")
+            }
+            toString()
+        }
+    }
+
+    fun insert(): Boolean {
+
+    }
+}
+
+fun List<Measurement>.insert() {
+
 }
 
 sealed class Expression<T: Any>(val name: String, val value: T) {

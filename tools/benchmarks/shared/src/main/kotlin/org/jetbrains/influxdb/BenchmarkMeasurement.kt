@@ -30,10 +30,21 @@ class CommitsList(data: JsonElement): ConvertedFromJson {
     }
 }
 
+data class BuildInfo(val number: String, val startTime: String, val endTime: String, val commitsList: CommitsList,
+                     val branch: String)
+
 class BenchmarkMeasurement : Measurement("benchmarks") {
 
+    fun initBuildInfo(buildInfo: BuildInfo) {
+        buildNumber = buildInfo.number
+        buildBranch = buildInfo.branch
+        buildCommits = buildInfo.commitsList
+        buildStartTime = buildInfo.startTime
+        buildEndTime = buildInfo.endTime
+    }
+
     companion object: EntityFromJsonFactory<List<BenchmarkMeasurement>> {
-        fun fromReport(benchmarksReport: BenchmarksReport): List<BenchmarkMeasurement> {
+        fun fromReport(benchmarksReport: BenchmarksReport, buildInfo: BuildInfo?): List<BenchmarkMeasurement> {
             val points = mutableListOf<BenchmarkMeasurement>()
             benchmarksReport.benchmarks.forEach { (name, results) ->
                 results.forEach {
@@ -55,6 +66,9 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                     point.benchmarkRuntime = it.runtimeInUs
                     point.benchmarkRepeat = it.repeat
                     point.benchmarkWarmup = it.warmup
+                    buildInfo?.let {
+                        point.initBuildInfo(buildInfo)
+                    }
                     points.add(point)
                 }
             }
@@ -65,7 +79,7 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
             TODO()
         }
 
-        override fun create(data: JsonElement): List<BenchmarkMeasurement> {
+        override fun create(data: JsonElement, buildInfo: BuildInfo? = null): List<BenchmarkMeasurement> {
             val points = mutableListOf<BenchmarkMeasurement>()
             if (data is JsonObject) {
                 val env = data.getRequiredField("env") as JsonObject
@@ -122,6 +136,9 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                                 point.benchmarkRuntime = runtimeInUs
                                 point.benchmarkRepeat = repeat
                                 point.benchmarkWarmup = warmup
+                                buildInfo?.let {
+                                    point.initBuildInfo(buildInfo)
+                                }
                                 points.add(point)
                             } else {
                                 error("Status should be string literal.")
@@ -168,4 +185,5 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
     var buildStartTime by Field<String>("build.startTime")
     var buildEndTime by Field<String>("build.endTime")
     var buildCommits by Field<CommitsList>("build.commits")
+    var buildBranch by Field<String>("build.branch")
 }

@@ -115,8 +115,8 @@ data class GoldenResult(val benchmarkName: String, val metric: String, val value
 data class GoldenResultsInfo(val bintrayUser: String, val bintrayPassword: String, val goldenResults: Array<GoldenResult>)
 
 // Build information provided from request.
-data class BuildInfo(val buildNumber: String, val branch: String, val startTime: String,
-                     val finishTime: String)
+data class TCBuildInfo(val buildNumber: String, val branch: String, val startTime: String,
+                       val finishTime: String)
 
 data class BuildRegister(val buildId: String, val teamCityUser: String, val teamCityPassword: String,
                     val bundleSize: String?) {
@@ -135,12 +135,16 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
         "$teamCityUrl/changes/?locator=build:id:$buildId"
     }
 
-    private fun sendTeamCityRequest(url: String) = sendRequest(RequestMethod.GET, url, teamCityUser, teamCityPassword)
+    private val fileWithResults = "nativeReport.json"
+
+    val teamCityArtifactsUrl: String by lazy { "$teamCityUrl/app/rest/builds/id:$buildId/artifacts/content/$fileWithResults" }
+
+    private fun sendTeamCityRequest(url: String, json: Boolean = false) = sendRequest(RequestMethod.GET, url, teamCityUser, teamCityPassword, json)
 
     private fun format(timeValue: Int): String =
             if (timeValue < 10) "0$timeValue" else "$timeValue"
 
-    fun getBuildInformation(): BuildInfo {
+    fun getBuildInformation(): TCBuildInfo {
         val buildNumber = sendTeamCityRequest("$teamCityBuildUrl/number")
         val branch = sendTeamCityRequest("$teamCityBuildUrl/branchName")
         val startTime = sendTeamCityRequest("$teamCityBuildUrl/startDate")
@@ -158,7 +162,7 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
                     "${format(currentTime.getUTCMinutes())}" +
                     "${format(currentTime.getUTCSeconds())}" +
                     "${if (timeZone > 0) "+" else "-"}${format(timeZone)}${format(0)}"
-            BuildInfo(buildNumber, branch, startTime, finishTime)
+            TCBuildInfo(buildNumber, branch, startTime, finishTime)
         }
     }
 }
@@ -208,10 +212,16 @@ fun router() {
 
         // Get information from TeamCity.
         register.getBuildInformation().then { buildInfo ->
-            sendRequest(RequestMethod.GET, register.changesListUrl, register.teamCityUser,
-                    register.teamCityPassword, true).then { changes ->
+            register.sendTeamCityRequest(register.changesListUrl, true).then { changes ->
 
                 val commitsList = CommitsList(JsonTreeParser.parse(changes))
+                // Get artifact.
+                register.sendTeamCityRequest(register.teamCityArtifactsUrl).then { resultsContent ->
+                    val results = BenchmarkMeasurement.create(JsonTreeParser.parse(resultsContent),
+                            BuildInfo(buildInfo.buildNumber, buildInfo.startTime, buildInfo.finishTime,
+                                    commitsList, buildInfo.branch))
+
+                }
                 /*val commitsDescription = buildString {
                     if (commitsList.commits.size > maxCommitsNumber) {
                         append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
@@ -228,10 +238,10 @@ fun router() {
                 }*/
 
                 // Get summary file from Bintray.
-                var buildsDescription = getBuildsInfoFromBintray(register.target)
+                //var buildsDescription = getBuildsInfoFromBintray(register.target)
                 // Add information about new build.
                 //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
-                buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
+                /*buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
                         "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
                         "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
                         "${register.bundleSize ?: "-"}\n"
@@ -241,7 +251,9 @@ fun router() {
                 sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
 
                 LocalCache.clean(register.target)
-                LocalCache.fill(register.target)
+                LocalCache.fill(register.target)*/
+
+                // Load to database.
 
                 // Send response.
                 response.sendStatus(200)

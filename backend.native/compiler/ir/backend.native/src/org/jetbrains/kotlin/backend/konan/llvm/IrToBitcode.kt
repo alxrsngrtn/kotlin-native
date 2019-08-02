@@ -9,6 +9,7 @@ import kotlinx.cinterop.*
 import llvm.*
 import org.jetbrains.kotlin.backend.common.descriptors.allParameters
 import org.jetbrains.kotlin.backend.common.ir.ir2string
+import org.jetbrains.kotlin.backend.common.lower.inline.InlinerExpressionLocationHint
 import org.jetbrains.kotlin.backend.konan.*
 import org.jetbrains.kotlin.backend.konan.descriptors.*
 import org.jetbrains.kotlin.backend.konan.ir.*
@@ -22,6 +23,7 @@ import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.expressions.*
+import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.*
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
@@ -276,6 +278,35 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
         }
     }
 
+    private fun <R> switchTo(irFunction: IrFunction, block: () -> R): R? {
+        val oldCodeContext = currentCodeContext
+
+        try {
+            if ((currentCodeContext as? FunctionScope)?.declaration == irFunction
+                    || (currentCodeContext as? ReturnableBlockScope)?.returnableBlock?.inlineFunctionSymbol?.owner == irFunction
+                    || (currentCodeContext as? FunctionScope)?.declaration == irFunction)
+                return block()
+            currentCodeContext = (currentCodeContext as? InnerScope)?.outerContext ?: return null
+            return switchTo(irFunction, block)
+        } finally {
+            currentCodeContext = oldCodeContext
+        }
+    }
+
+    private fun <R> switchTo(irFile: IrFile, block: () -> R): R? {
+        val oldCodeContext = currentCodeContext
+
+        try {
+            if ((currentCodeContext as? FileScope)?.file == irFile
+                    || (currentCodeContext as? ReturnableBlockScope)?.file == irFile
+                    || ((currentCodeContext as? FunctionScope)?.fileScope() as? FileScope)?.file == irFile)
+                return block()
+            currentCodeContext = (currentCodeContext as? InnerScope)?.outerContext ?: return null
+            return switchTo(irFile, block)
+        } finally {
+            currentCodeContext = oldCodeContext
+        }
+    }
     private fun appendCAdapters() {
         context.cAdapterGenerator.generateBindings(codegen)
     }
@@ -1197,7 +1228,17 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
 
     private fun generateVariable(variable: IrVariable) {
         context.log{"generateVariable               : ${ir2string(variable)}"}
-        val value = variable.initializer?.let { evaluateExpression(it) }
+        val value = variable.initializer?.let {
+            val callSiteOrigin = (it as? IrBlock)?.origin as? InlinerExpressionLocationHint
+            val inlineAtFunctionSymbol = callSiteOrigin?.inlineAtSymbol as? IrFunctionSymbol
+            inlineAtFunctionSymbol?.run {
+                switchTo(inlineAtFunctionSymbol.owner.file) {
+                    switchTo(inlineAtFunctionSymbol.owner) {
+                        evaluateExpression(it)
+                    }
+                }
+            } ?: evaluateExpression(it)
+        }
         currentCodeContext.genDeclareVariable(
                 variable, value, debugInfoIfNeeded(
                 (currentCodeContext.functionScope() as FunctionScope).declaration, variable))

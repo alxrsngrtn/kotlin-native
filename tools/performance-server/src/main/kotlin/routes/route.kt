@@ -17,6 +17,7 @@
 import org.w3c.xhr.*
 import kotlin.js.json
 import kotlin.js.Date
+import kotlin.js.Promise
 import org.jetbrains.report.json.*
 import org.jetbrains.influxdb.*
 import org.jetbrains.build.Build
@@ -43,7 +44,7 @@ object LocalCache {
     }
 
     fun fill(onlyTarget: String? = null) {
-        onlyTarget?.let {
+        /*onlyTarget?.let {
             val buildsDescription = getBuildsInfoFromBintray(onlyTarget).lines().drop(1)
             buildsInfo[onlyTarget] = mutableMapOf<String, String>()
             buildsDescription.forEach {
@@ -60,7 +61,7 @@ object LocalCache {
             knownTargets.forEach {
                 fill(it)
             }
-        }
+        }*/
     }
 
     fun buildExists(target: String, buildNumber: String) =
@@ -68,7 +69,7 @@ object LocalCache {
 
     fun delete(target: String, builds: Iterable<String>, bintrayUser: String, bintrayPassword: String): Boolean {
         // Delete from bintray.
-        val buildsDescription = getBuildsInfoFromBintray(target).lines()
+        /*val buildsDescription = getBuildsInfoFromBintray(target).lines()
 
         val newBuildsDescription = buildsDescription.filter {
             val buildNumber = it.substringBefore(',')
@@ -84,7 +85,7 @@ object LocalCache {
             clean(target)
             fill(target)
             return true
-        }
+        }*/
         return false
     }
 
@@ -137,17 +138,14 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
 
     private val fileWithResults = "nativeReport.json"
 
-    val teamCityArtifactsUrl: String by lazy { "$teamCityUrl/app/rest/builds/id:$buildId/artifacts/content/$fileWithResults" }
+    val teamCityArtifactsUrl: String by lazy { "$teamCityUrl/builds/id:$buildId/artifacts/content/$fileWithResults" }
 
-    private fun sendTeamCityRequest(url: String, json: Boolean = false) = sendRequest(RequestMethod.GET, url, teamCityUser, teamCityPassword, json)
+    fun sendTeamCityRequest(url: String, json: Boolean = false) = sendRequest(RequestMethod.GET, url, teamCityUser, teamCityPassword, json)
 
     private fun format(timeValue: Int): String =
             if (timeValue < 10) "0$timeValue" else "$timeValue"
 
-    fun getBuildInformation(): TCBuildInfo {
-        val buildNumber = sendTeamCityRequest("$teamCityBuildUrl/number")
-        val branch = sendTeamCityRequest("$teamCityBuildUrl/branchName")
-        val startTime = sendTeamCityRequest("$teamCityBuildUrl/startDate")
+    fun getBuildInformation(): Promise<TCBuildInfo> {
         return Promise.all(arrayOf(sendTeamCityRequest("$teamCityBuildUrl/number"),
                 sendTeamCityRequest("$teamCityBuildUrl/branchName"),
                 sendTeamCityRequest("$teamCityBuildUrl/startDate"))).then { results ->
@@ -169,8 +167,8 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
 
 
 
-fun getBuildsInfoFromBintray(target: String) =
-        sendGetRequest("$downloadBintrayUrl/$target/$buildsFileName")
+/*fun getBuildsInfoFromBintray(target: String) =
+        sendGetRequest("$downloadBintrayUrl/$target/$buildsFileName")*/
 
 fun checkBuildType(currentType: String, targetType: String): Boolean {
     val releasesBuildTypes = listOf("release", "eap", "rc1", "rc2")
@@ -205,6 +203,8 @@ fun buildDescriptionToTokens(buildDescription: String): List<String> {
 fun router() {
     val express = require("express")
     val router = express.Router()
+    val dbConnector = InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native",
+            user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
 
     // Register build on Bintray.
     router.post("/registerTCBuild", { request, response ->
@@ -220,7 +220,9 @@ fun router() {
                     val results = BenchmarkMeasurement.create(JsonTreeParser.parse(resultsContent),
                             BuildInfo(buildInfo.buildNumber, buildInfo.startTime, buildInfo.finishTime,
                                     commitsList, buildInfo.branch))
-
+                    println("Get results")
+                    // Save results in database.
+                    dbConnector.insert(results)
                 }
                 /*val commitsDescription = buildString {
                     if (commitsList.commits.size > maxCommitsNumber) {
@@ -268,7 +270,7 @@ fun router() {
 
         // Get information from TeamCity.
         val buildInfo = register.getBuildInformation()
-        val changes = sendGetRequest(register.changesListUrl, register.teamCityUser,
+        /*val changes = sendGetRequest(register.changesListUrl, register.teamCityUser,
                 register.teamCityPassword, true)
         val commitsList = CommitsList(JsonTreeParser.parse(changes))
         val commitsDescription = buildString {
@@ -284,10 +286,10 @@ fun router() {
                     append("${it.revision} by ${it.developer};")
                 }
             }
-        }
+        }*/
 
         // Get summary file from Bintray.
-        var buildsDescription = getBuildsInfoFromBintray(register.target)
+        /*var buildsDescription = getBuildsInfoFromBintray(register.target)
         // Add information about new build.
         //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
         buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
@@ -301,21 +303,21 @@ fun router() {
 
         LocalCache.clean(register.target)
         LocalCache.fill(register.target)
-
+*/
         // Send response.
         response.sendStatus(200)
     })
 
     // Register golden results to normalize on Bintray.
     router.post("/registerGolden", { request, response ->
-        val goldenResultsInfo = JSON.parse<GoldenResultsInfo>(JSON.stringify(request.body))
+       /* val goldenResultsInfo = JSON.parse<GoldenResultsInfo>(JSON.stringify(request.body))
         val buildsDescription = StringBuilder(sendGetRequest("$downloadBintrayUrl/$goldenResultsFileName"))
         goldenResultsInfo.goldenResults.forEach {
             buildsDescription.append("${it.benchmarkName}, ${it.metric}, ${it.value}\n")
         }
         // Upload new version of file.
         val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/$goldenResultsFileName?publish=1&override=1"
-        sendUploadRequest(uploadUrl, buildsDescription.toString(), goldenResultsInfo.bintrayUser, goldenResultsInfo.bintrayPassword)
+        sendUploadRequest(uploadUrl, buildsDescription.toString(), goldenResultsInfo.bintrayUser, goldenResultsInfo.bintrayPassword)*/
         // Send response.
         response.sendStatus(200)
     })
@@ -368,7 +370,7 @@ fun router() {
 
     router.get("/test", { _, response ->
         InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native", user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
-        val executionTime = ExecutionTime()
+        //val executionTime = ExecutionTime()
 
         response.sendStatus(200)
     })
@@ -387,7 +389,7 @@ enum class RequestMethod {
 }
 
 fun sendRequest(method: RequestMethod, url: String, user: String? = null, password: String? = null,
-                jsonContentType: Boolean = false, body: String? = null) : String {
+                jsonContentType: Boolean = false, body: String? = null) : Promise<String> {
     val request = require("node-fetch")
     val headers = mutableListOf<Pair<String, String>>()
     if (user != null && password != null) {
@@ -396,14 +398,17 @@ fun sendRequest(method: RequestMethod, url: String, user: String? = null, passwo
     if (jsonContentType) {
         headers.add("Accept" to "application/json")
     }
+    println("Send request $url")
     return request(url,
             json(
-                    "method" to method,
+                    "method" to method.toString(),
                     "headers" to json(*(headers.toTypedArray())),
                     "body" to body
             )
     ).then { response ->
-        if (response.statusCode != 200)
+        println("Response")
+        //println("Get response ${response.text()}")
+        if (!response.ok)
             error("Error during getting response from $url\n" +
                     "${response.text()}")
         else

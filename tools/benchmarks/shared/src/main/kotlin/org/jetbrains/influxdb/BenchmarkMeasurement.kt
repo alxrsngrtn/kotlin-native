@@ -79,7 +79,17 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
             TODO()
         }
 
-        override fun create(data: JsonElement, buildInfo: BuildInfo? = null): List<BenchmarkMeasurement> {
+        fun create(data: JsonElement, buildInfo: BuildInfo? = null): List<BenchmarkMeasurement> {
+            val results = create(data)
+            buildInfo?.let {
+                results.forEach {
+                    it.initBuildInfo(buildInfo)
+                }
+            }
+            return results
+        }
+
+        override fun create(data: JsonElement): List<BenchmarkMeasurement> {
             val points = mutableListOf<BenchmarkMeasurement>()
             if (data is JsonObject) {
                 val env = data.getRequiredField("env") as JsonObject
@@ -136,9 +146,6 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                                 point.benchmarkRuntime = runtimeInUs
                                 point.benchmarkRepeat = repeat
                                 point.benchmarkWarmup = warmup
-                                buildInfo?.let {
-                                    point.initBuildInfo(buildInfo)
-                                }
                                 points.add(point)
                             } else {
                                 error("Status should be string literal.")

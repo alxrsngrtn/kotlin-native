@@ -8,9 +8,22 @@ class InfluxDBConnector(val host: String, val databaseName: String, val port: In
     }
     //fun<T : Measurement, U: Any> select(columns: ColumnEntity<*>, where: (ColumnEntity<U>)->Expression<U>): List<T> {}
 
-    /*fun insert(point: Measurement) {
+    fun insert(point: Measurement) {
+        val description = point.lineProtocol()
+        println(description)
+    }
 
-    }*/
+    fun insert(points: Collection<Measurement>) {
+        val description  = with(StringBuilder()) {
+            var prefix = ""
+            points.forEach {
+                append("${prefix}${it.lineProtocol()}")
+                prefix = "\n"
+            }
+            toString()
+        }
+        println(description)
+    }
 }
 
 open class Measurement(val name: String) {
@@ -35,32 +48,31 @@ open class Measurement(val name: String) {
         }
     }
 
-    private val description by lazy {
+    fun lineProtocol() =
         with(StringBuilder("$name,")) {
             var prefix = ""
             tags.forEach {
-                append("${prefix}${it.name}=${it.value}")
-                prefix = ","
+                it.value?.let {value ->
+                    append("${prefix}${it.lineProtocol()}")
+                    prefix = ","
+                } ?: println("Tag $it.name isn't initialized.")
             }
             prefix = " "
             fields.forEach {
-                append("${prefix}${it.name}=${it.value}")
-                prefix = ","
+                it.value?.let { value ->
+                    append("${prefix}${it.name}=$value")
+                    prefix = ","
+                } ?: println("Field $it.name isn't initialized.")
             }
             timestamp?.let {
                 append(" $timestamp")
             }
             toString()
         }
-    }
 
     fun insert(): Boolean {
-
+        TODO()
     }
-}
-
-fun List<Measurement>.insert() {
-
 }
 
 sealed class Expression<T: Any>(val name: String, val value: T) {
@@ -77,8 +89,21 @@ sealed class ColumnEntity<T : Any>(val name: String) {
         value = definedValue
     }
     //infix fun eq(value: T)
-    class FieldEntity<T : Any>(name: String) : ColumnEntity<T>(name)
-    class TagEntity<T : Any>(name: String) : ColumnEntity<T>(name)
+    class FieldEntity<T : Any>(name: String) : ColumnEntity<T>(name) {
+        inline fun <reified T> lineProtocol(): String {
+            when (T::class) {
+                Int::class -> "${value}i"
+                Double::class -> "$value"
+
+                else -> "\"$value\""
+            }
+        }
+    }
+    class TagEntity<T : Any>(name: String) : ColumnEntity<T>(name) {
+        private fun escape() = "$value".replace(" |,|=".toRegex()) { match -> "\\${match.value}" }
+
+        fun lineProtocol() = "$name=${escape()}"
+    }
 }
 
 

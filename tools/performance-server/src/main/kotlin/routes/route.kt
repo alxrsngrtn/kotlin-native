@@ -32,88 +32,8 @@ const val buildsInfoPartsNumber = 11
 
 operator fun <K, V> Map<K, V>?.get(key: K) = this?.get(key)
 
-// Local cache for saving information about builds got from Bintray.
-object LocalCache {
-    private val knownTargets = listOf("Linux", "MacOSX", "Windows10")
-    private val buildsInfo = mutableMapOf<String, MutableMap<String, String>>()
-
-    fun clean(onlyTarget: String? = null) {
-        onlyTarget?.let {
-            buildsInfo[onlyTarget]?.clear()
-        } ?: buildsInfo.clear()
-    }
-
-    fun fill(onlyTarget: String? = null) {
-        /*onlyTarget?.let {
-            val buildsDescription = getBuildsInfoFromBintray(onlyTarget).lines().drop(1)
-            buildsInfo[onlyTarget] = mutableMapOf<String, String>()
-            buildsDescription.forEach {
-                if (!it.isEmpty()) {
-                    val buildNumber = it.substringBefore(',')
-                    if (!"\\d+(\\.\\d+)+-\\w+-\\d+".toRegex().matches(buildNumber)) {
-                        error("Build number $buildNumber differs from expected format. File with data for " +
-                                "target $onlyTarget could be corrupted.")
-                    }
-                    buildsInfo[onlyTarget]!![buildNumber] = it
-                }
-            }
-        } ?: run {
-            knownTargets.forEach {
-                fill(it)
-            }
-        }*/
-    }
-
-    fun buildExists(target: String, buildNumber: String) =
-            buildsInfo[target][buildNumber]?.let { true } ?: false
-
-    fun delete(target: String, builds: Iterable<String>, bintrayUser: String, bintrayPassword: String): Boolean {
-        // Delete from bintray.
-        /*val buildsDescription = getBuildsInfoFromBintray(target).lines()
-
-        val newBuildsDescription = buildsDescription.filter {
-            val buildNumber = it.substringBefore(',')
-            buildNumber !in builds
-        }
-
-        if (newBuildsDescription.size < buildsDescription.size) {
-            // Upload new version of file.
-            val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/$target/$buildsFileName?publish=1&override=1"
-            sendUploadRequest(uploadUrl, newBuildsDescription.joinToString("\n"), bintrayUser, bintrayPassword)
-
-            // Reload values.
-            clean(target)
-            fill(target)
-            return true
-        }*/
-        return false
-    }
-
-    private fun getBuilds(target: String, buildNumber: String? = null) =
-            buildsInfo[target]?.let { buildsList ->
-                buildNumber?.let {
-                    // Check if interesting build id is in cache.
-                    buildsList[it]?.let { buildsList.values }
-                } ?: buildsList.values
-            }
-
-    operator fun get(target: String, buildId: String? = null): Collection<String> {
-        val builds = getBuilds(target, buildId)
-
-        if (builds.isNullOrEmpty()) {
-            // No suitable builds were found.
-            // Refill cache.
-            clean(target)
-            fill(target)
-            return getBuilds(target, buildId) ?: listOf<String>()
-        }
-
-        return builds
-    }
-}
-
 data class GoldenResult(val benchmarkName: String, val metric: String, val value: Double)
-data class GoldenResultsInfo(val bintrayUser: String, val bintrayPassword: String, val goldenResults: Array<GoldenResult>)
+data class GoldenResultsInfo(val goldenResults: Array<GoldenResult>)
 
 // Build information provided from request.
 data class TCBuildInfo(val buildNumber: String, val branch: String, val startTime: String,
@@ -164,9 +84,6 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
         }
     }
 }
-
-/*fun getBuildsInfoFromBintray(target: String) =
-        sendGetRequest("$downloadBintrayUrl/$target/$buildsFileName")*/
 
 fun checkBuildType(currentType: String, targetType: String): Boolean {
     val releasesBuildTypes = listOf("release", "eap", "rc1", "rc2")
@@ -223,7 +140,6 @@ fun router() {
                     println("Get results")
                     // Save results in database.
                     dbConnector.insert(results).then { dbResponce ->
-                        println(dbResponce)
                         response.sendStatus(200)
                     }.catch {
                         response.sendStatus(400)
@@ -236,19 +152,18 @@ fun router() {
     // Register golden results to normalize on Bintray.
     router.post("/registerGolden", { request, response ->
         val goldenResultsInfo = JSON.parse<GoldenResultsInfo>(JSON.stringify(request.body))
-        val buildsDescription = StringBuilder(sendGetRequest("$downloadBintrayUrl/$goldenResultsFileName"))
-        goldenResultsInfo.goldenResults.forEach {
-            buildsDescription.append("${it.benchmarkName}, ${it.metric}, ${it.value}\n")
+        val resultPoints = goldenResultsInfo.goldenResults.map {
+            GoldenResultMeasurement(it.benchmarkName, it.metric, it.value)
         }
-        // Upload new version of file.
-        val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/$goldenResultsFileName?publish=1&override=1"
-        sendUploadRequest(uploadUrl, buildsDescription.toString(), goldenResultsInfo.bintrayUser, goldenResultsInfo.bintrayPassword)*/
-        // Send response.
-        response.sendStatus(200)
+        dbConnector.insert(resultPoints).then { dbResponce ->
+            response.sendStatus(200)
+        }.catch {
+            response.sendStatus(400)
+        }
     })
 
     // Get list of builds.
-    router.get("/builds/:target/:type/:branch/:id", { request, response ->
+    /*router.get("/builds/:target/:type/:branch/:id", { request, response ->
         val builds = LocalCache[request.params.target, request.params.id]
         response.json(prepareBuildsResponse(builds, request.params.type, request.params.branch, request.params.id))
     })
@@ -286,7 +201,7 @@ fun router() {
         } else {
             response.sendStatus(404)
         }
-    })
+    })*/
 
     // Main page.
     router.get("/", { _, response ->

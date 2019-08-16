@@ -1,6 +1,5 @@
 package org.jetbrains.influxdb
 
-import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 
 class InfluxDBConnector <T>(val host: String, val databaseName: String, val port: Int = 8086,

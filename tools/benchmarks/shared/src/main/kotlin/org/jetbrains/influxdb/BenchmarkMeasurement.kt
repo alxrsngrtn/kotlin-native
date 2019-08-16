@@ -38,6 +38,18 @@ class CommitsList(data: JsonElement): ConvertedFromJson {
 data class BuildInfo(val number: String, val startTime: String, val endTime: String, val commitsList: CommitsList,
                      val branch: String)
 
+class GoldenResultMeasurement(name: String, metric: String, score: Double) : Measurement("goldenResults") {
+    var benchmarkName by Tag<String>("benchmark.name")
+    var benchmarkScore by Field<FieldType.InfluxFloat>("benchmark.score")
+    var benchmarkMetric by Tag<String>("benchmark.metric")
+
+    init {
+        benchmarkName = name
+        benchmarkScore = FieldType.InfluxFloat(score)
+        benchmarkMetric = metric
+    }
+}
+
 class BenchmarkMeasurement : Measurement("benchmarks") {
 
     fun initBuildInfo(buildInfo: BuildInfo) {

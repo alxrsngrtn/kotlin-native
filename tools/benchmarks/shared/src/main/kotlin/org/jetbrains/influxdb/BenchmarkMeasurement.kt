@@ -3,7 +3,9 @@ package org.jetbrains.influxdb
 import org.jetbrains.report.*
 import org.jetbrains.report.json.*
 
-data class Commit(val revision: String, val developer: String)
+data class Commit(val revision: String, val developer: String) {
+    override fun toString() = "$revision by $developer"
+}
 
 // List of commits.
 class CommitsList(data: JsonElement): ConvertedFromJson {
@@ -28,6 +30,9 @@ class CommitsList(data: JsonElement): ConvertedFromJson {
             }
         } ?: listOf<Commit>()
     }
+
+    override fun toString(): String =
+        commits.toString()
 }
 
 data class BuildInfo(val number: String, val startTime: String, val endTime: String, val commitsList: CommitsList,
@@ -36,11 +41,11 @@ data class BuildInfo(val number: String, val startTime: String, val endTime: Str
 class BenchmarkMeasurement : Measurement("benchmarks") {
 
     fun initBuildInfo(buildInfo: BuildInfo) {
-        buildNumber = buildInfo.number
-        buildBranch = buildInfo.branch
-        buildCommits = buildInfo.commitsList
-        buildStartTime = buildInfo.startTime
-        buildEndTime = buildInfo.endTime
+        buildNumber = FieldType.InfluxString(buildInfo.number)
+        buildBranch = FieldType.InfluxString(buildInfo.branch)
+        buildCommits = FieldType.InfluxString(buildInfo.commitsList)
+        buildStartTime = FieldType.InfluxString(buildInfo.startTime)
+        buildEndTime = FieldType.InfluxString(buildInfo.endTime)
     }
 
     companion object: EntityFromJsonFactory<List<BenchmarkMeasurement>> {
@@ -51,21 +56,21 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                     val point = BenchmarkMeasurement()
                     point.envMachineCpu = benchmarksReport.env.machine.cpu
                     point.envMachineOs = benchmarksReport.env.machine.os
-                    point.envJDKVendor = benchmarksReport.env.jdk.vendor
-                    point.envJDKVersion = benchmarksReport.env.jdk.version
+                    point.envJDKVendor = FieldType.InfluxString(benchmarksReport.env.jdk.vendor)
+                    point.envJDKVersion = FieldType.InfluxString(benchmarksReport.env.jdk.version)
 
                     point.kotlinBackendType = benchmarksReport.compiler.backend.type.toString()
-                    point.kotlinBackendVersion = benchmarksReport.compiler.backend.version
+                    point.kotlinBackendVersion = FieldType.InfluxString(benchmarksReport.compiler.backend.version)
                     point.kotlinBackendFlags = benchmarksReport.compiler.backend.flags
-                    point.kotlinVersion = benchmarksReport.compiler.kotlinVersion
+                    point.kotlinVersion = FieldType.InfluxString(benchmarksReport.compiler.kotlinVersion)
 
                     point.benchmarkName = name
-                    point.benchmarkStatus = it.status.toString()
-                    point.benchmarkScore = it.score
+                    point.benchmarkStatus = FieldType.InfluxString(it.status)
+                    point.benchmarkScore = FieldType.InfluxFloat(it.score)
                     point.benchmarkMetric = it.metric.value
-                    point.benchmarkRuntime = it.runtimeInUs
-                    point.benchmarkRepeat = it.repeat
-                    point.benchmarkWarmup = it.warmup
+                    point.benchmarkRuntime = FieldType.InfluxFloat(it.runtimeInUs)
+                    point.benchmarkRepeat = FieldType.InfluxInt(it.repeat)
+                    point.benchmarkWarmup = FieldType.InfluxInt(it.warmup)
                     buildInfo?.let {
                         point.initBuildInfo(buildInfo)
                     }
@@ -131,21 +136,21 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                                 val point = BenchmarkMeasurement()
                                 point.envMachineCpu = cpu
                                 point.envMachineOs = os
-                                point.envJDKVendor = jdkVendor
-                                point.envJDKVersion = jdkVersion
+                                point.envJDKVendor = FieldType.InfluxString(jdkVendor)
+                                point.envJDKVersion = FieldType.InfluxString(jdkVersion)
 
                                 point.kotlinBackendType = type
-                                point.kotlinBackendVersion = version
+                                point.kotlinBackendVersion = FieldType.InfluxString(version)
                                 point.kotlinBackendFlags = flags
-                                point.kotlinVersion = kotlinVersion
+                                point.kotlinVersion = FieldType.InfluxString(kotlinVersion)
 
                                 point.benchmarkName = name
-                                point.benchmarkStatus = status
-                                point.benchmarkScore = score
+                                point.benchmarkStatus = FieldType.InfluxString(status)
+                                point.benchmarkScore = FieldType.InfluxFloat(score)
                                 point.benchmarkMetric = metric
-                                point.benchmarkRuntime = runtimeInUs
-                                point.benchmarkRepeat = repeat
-                                point.benchmarkWarmup = warmup
+                                point.benchmarkRuntime = FieldType.InfluxFloat(runtimeInUs)
+                                point.benchmarkRepeat = FieldType.InfluxInt(repeat)
+                                point.benchmarkWarmup = FieldType.InfluxInt(warmup)
                                 points.add(point)
                             } else {
                                 error("Status should be string literal.")
@@ -168,29 +173,29 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
     var envMachineCpu by Tag<String>("environment.machine.cpu")
     var envMachineOs by Tag<String>("environment.machine.os")
     // JDK.
-    var envJDKVersion by Field<String>("environment.jdk.version")
-    var envJDKVendor by Field<String>("environment.jdk.vendor")
+    var envJDKVersion by Field<FieldType.InfluxString>("environment.jdk.version")
+    var envJDKVendor by Field<FieldType.InfluxString>("environment.jdk.vendor")
 
     // Kotlin information.
     // Backend.
     var kotlinBackendType by Tag<String>("kotlin.backend.type")
-    var kotlinBackendVersion by Field<String>("kotlin.backend.version")
+    var kotlinBackendVersion by Field<FieldType.InfluxString>("kotlin.backend.version")
     var kotlinBackendFlags by Tag<List<String>>("kotlin.backend.flags")
-    var kotlinVersion by Field<String>("kotlin.kotlinVersion")
+    var kotlinVersion by Field<FieldType.InfluxString>("kotlin.kotlinVersion")
 
     // Benchmark data.
     var benchmarkName by Tag<String>("benchmark.name")
-    var benchmarkStatus by Field<String>("benchmark.status")
-    var benchmarkScore by Field<Double>("benchmark.score")
+    var benchmarkStatus by Field<FieldType.InfluxString>("benchmark.status")
+    var benchmarkScore by Field<FieldType.InfluxFloat>("benchmark.score")
     var benchmarkMetric by Tag<String>("benchmark.metric")
-    var benchmarkRuntime by Field<Double>("benchmark.runtimeInUs")
-    var benchmarkRepeat by Field<Int>("benchmark.repeat")
-    var benchmarkWarmup by Field<Int>("benchmark.warmup")
+    var benchmarkRuntime by Field<FieldType.InfluxFloat>("benchmark.runtimeInUs")
+    var benchmarkRepeat by Field<FieldType.InfluxInt>("benchmark.repeat")
+    var benchmarkWarmup by Field<FieldType.InfluxInt>("benchmark.warmup")
 
     // Build information (from CI).
-    var buildNumber by Field<String>("build.number")
-    var buildStartTime by Field<String>("build.startTime")
-    var buildEndTime by Field<String>("build.endTime")
-    var buildCommits by Field<CommitsList>("build.commits")
-    var buildBranch by Field<String>("build.branch")
+    var buildNumber by Field<FieldType.InfluxString>("build.number")
+    var buildStartTime by Field<FieldType.InfluxString>("build.startTime")
+    var buildEndTime by Field<FieldType.InfluxString>("build.endTime")
+    var buildCommits by Field<FieldType.InfluxString>("build.commits")
+    var buildBranch by Field<FieldType.InfluxString>("build.branch")
 }

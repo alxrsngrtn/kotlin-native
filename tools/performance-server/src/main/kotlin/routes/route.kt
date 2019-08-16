@@ -165,8 +165,6 @@ data class BuildRegister(val buildId: String, val teamCityUser: String, val team
     }
 }
 
-
-
 /*fun getBuildsInfoFromBintray(target: String) =
         sendGetRequest("$downloadBintrayUrl/$target/$buildsFileName")*/
 
@@ -204,10 +202,12 @@ fun router() {
     val express = require("express")
     val router = express.Router()
     val dbConnector = InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native",
-            user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
+            user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq") { url, body, user, password ->
+        sendRequest(RequestMethod.POST,url, user, password, body = body)
+    }
 
     // Register build on Bintray.
-    router.post("/registerTCBuild", { request, response ->
+    router.post("/register", { request, response ->
         val register = BuildRegister.create(JSON.stringify(request.body))
 
         // Get information from TeamCity.
@@ -222,95 +222,20 @@ fun router() {
                                     commitsList, buildInfo.branch))
                     println("Get results")
                     // Save results in database.
-                    dbConnector.insert(results)
-                }
-                /*val commitsDescription = buildString {
-                    if (commitsList.commits.size > maxCommitsNumber) {
-                        append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
-                        append("${commitsList.commits.get(1).revision} by ${commitsList.commits.get(1).developer};")
-                        append("...;")
-                        val beforeLast = commitsList.commits.lastIndex - 1
-                        append("${commitsList.commits.get(beforeLast).revision} by ${commitsList.commits.get(beforeLast).developer};")
-                        append("${commitsList.commits.last().revision} by ${commitsList.commits.last().developer};")
-                    } else {
-                        commitsList.commits.forEach {
-                            append("${it.revision} by ${it.developer};")
-                        }
+                    dbConnector.insert(results).then { dbResponce ->
+                        println(dbResponce)
+                        response.sendStatus(200)
+                    }.catch {
+                        response.sendStatus(400)
                     }
-                }*/
-
-                // Get summary file from Bintray.
-                //var buildsDescription = getBuildsInfoFromBintray(register.target)
-                // Add information about new build.
-                //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
-                /*buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
-                        "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
-                        "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
-                        "${register.bundleSize ?: "-"}\n"
-
-                // Upload new version of file.
-                val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/${register.target}/${buildsFileName}?publish=1&override=1"
-                sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
-
-                LocalCache.clean(register.target)
-                LocalCache.fill(register.target)*/
-
-                // Load to database.
-
-                // Send response.
-                response.sendStatus(200)
+                }
             }
         }
     })
 
-    // Register build on Bintray.
-    router.post("/register", { request, response ->
-        val maxCommitsNumber = 5
-        val register = BuildRegister.create(JSON.stringify(request.body))
-
-        // Get information from TeamCity.
-        val buildInfo = register.getBuildInformation()
-        /*val changes = sendGetRequest(register.changesListUrl, register.teamCityUser,
-                register.teamCityPassword, true)
-        val commitsList = CommitsList(JsonTreeParser.parse(changes))
-        val commitsDescription = buildString {
-            if (commitsList.commits.size > maxCommitsNumber) {
-                append("${commitsList.commits.get(0).revision} by ${commitsList.commits.get(0).developer};")
-                append("${commitsList.commits.get(1).revision} by ${commitsList.commits.get(1).developer};")
-                append("...;")
-                val beforeLast = commitsList.commits.lastIndex - 1
-                append("${commitsList.commits.get(beforeLast).revision} by ${commitsList.commits.get(beforeLast).developer};")
-                append("${commitsList.commits.last().revision} by ${commitsList.commits.last().developer};")
-            } else {
-                commitsList.commits.forEach {
-                    append("${it.revision} by ${it.developer};")
-                }
-            }
-        }*/
-
-        // Get summary file from Bintray.
-        /*var buildsDescription = getBuildsInfoFromBintray(register.target)
-        // Add information about new build.
-        //var buildsDescription = "build, start time, finish time, branch, commits, type, failuresNumber, execution time, compile time, code size, bundle size\n"
-        buildsDescription += "${buildInfo.buildNumber}, ${buildInfo.startTime}, ${buildInfo.finishTime}, " +
-                "${buildInfo.branch}, $commitsDescription, ${register.buildType}, ${register.failuresNumber}, " +
-                "${register.executionTime}, ${register.compileTime}, ${register.codeSize}, " +
-                "${register.bundleSize ?: "-"}\n"
-
-        // Upload new version of file.
-        val uploadUrl = "$uploadBintrayUrl/$bintrayPackage/latest/${register.target}/${buildsFileName}?publish=1&override=1"
-        sendUploadRequest(uploadUrl, buildsDescription, register.bintrayUser, register.bintrayPassword)
-
-        LocalCache.clean(register.target)
-        LocalCache.fill(register.target)
-*/
-        // Send response.
-        response.sendStatus(200)
-    })
-
     // Register golden results to normalize on Bintray.
     router.post("/registerGolden", { request, response ->
-       /* val goldenResultsInfo = JSON.parse<GoldenResultsInfo>(JSON.stringify(request.body))
+        val goldenResultsInfo = JSON.parse<GoldenResultsInfo>(JSON.stringify(request.body))
         val buildsDescription = StringBuilder(sendGetRequest("$downloadBintrayUrl/$goldenResultsFileName"))
         goldenResultsInfo.goldenResults.forEach {
             buildsDescription.append("${it.benchmarkName}, ${it.metric}, ${it.value}\n")
@@ -368,13 +293,6 @@ fun router() {
         response.render("index")
     })
 
-    router.get("/test", { _, response ->
-        InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native", user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
-        //val executionTime = ExecutionTime()
-
-        response.sendStatus(200)
-    })
-
     return router
 }
 
@@ -389,16 +307,15 @@ enum class RequestMethod {
 }
 
 fun sendRequest(method: RequestMethod, url: String, user: String? = null, password: String? = null,
-                jsonContentType: Boolean = false, body: String? = null) : Promise<String> {
+                acceptJsonContentType: Boolean = false, body: String? = null) : Promise<String> {
     val request = require("node-fetch")
     val headers = mutableListOf<Pair<String, String>>()
     if (user != null && password != null) {
         headers.add("Authorization" to getAuth(user, password))
     }
-    if (jsonContentType) {
+    if (acceptJsonContentType) {
         headers.add("Accept" to "application/json")
     }
-    println("Send request $url")
     return request(url,
             json(
                     "method" to method.toString(),
@@ -406,11 +323,9 @@ fun sendRequest(method: RequestMethod, url: String, user: String? = null, passwo
                     "body" to body
             )
     ).then { response ->
-        println("Response")
-        //println("Get response ${response.text()}")
         if (!response.ok)
             error("Error during getting response from $url\n" +
-                    "${response.text()}")
+                    "${response}")
         else
             response.text()
     }

@@ -1,8 +1,11 @@
 package org.jetbrains.influxdb
 
+import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 
-class InfluxDBConnector(val host: String, val databaseName: String, val port: Int = 8086, private val user: String? = null, private val password: String? = null) {
+class InfluxDBConnector <T>(val host: String, val databaseName: String, val port: Int = 8086,
+                        private val user: String? = null, private val password: String? = null,
+                        val postRequestSender: (url: String, body: String, user: String?, password: String?) -> T) {
     fun query(query: String) {
 
     }
@@ -13,7 +16,7 @@ class InfluxDBConnector(val host: String, val databaseName: String, val port: In
         println(description)
     }
 
-    fun insert(points: Collection<Measurement>) {
+    fun insert(points: Collection<Measurement>): T {
         val description  = with(StringBuilder()) {
             var prefix = ""
             points.forEach {
@@ -22,17 +25,27 @@ class InfluxDBConnector(val host: String, val databaseName: String, val port: In
             }
             toString()
         }
-        println(description)
+        val writeUrl = "$host:$port/write?db=$databaseName"
+        return postRequestSender(writeUrl, description, user, password)
     }
 }
 
+// Hack for Kotlin/JS.
+// Need separate classes to describe types, because Int and Double are same in Kotlin/JS.
+sealed class FieldType<T : Any>(val value: T) {
+    class InfluxInt(value: Int): FieldType<Int>(value)
+    class InfluxFloat(value: Double): FieldType<Double>(value)
+    class InfluxString(value: Any): FieldType<String>(value.toString())
+    class InfluxBoolean(value: Boolean): FieldType<Boolean>(value)
+}
+
 open class Measurement(val name: String) {
-    var timestamp: String? = null
+    var timestamp: ULong? = null
         protected set
     val fields = mutableListOf<ColumnEntity.FieldEntity<*>>()
     val tags = mutableListOf<ColumnEntity.TagEntity<*>>()
 
-    inner class Field<T: Any>(val name: String? = null) {
+    inner class Field<T: FieldType<*>>(val name: String? = null) {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): ColumnEntity.FieldEntity<T> {
             val field =  ColumnEntity.FieldEntity<T>(name ?: prop.name)
             fields.add(field)
@@ -60,7 +73,7 @@ open class Measurement(val name: String) {
             prefix = " "
             fields.forEach {
                 it.value?.let { value ->
-                    append("${prefix}${it.name}=$value")
+                    append("${prefix}${it.lineProtocol()}")
                     prefix = ","
                 } ?: println("Field $it.name isn't initialized.")
             }
@@ -88,17 +101,20 @@ sealed class ColumnEntity<T : Any>(val name: String) {
     operator fun setValue(thisRef: Any?, property: KProperty<*>, definedValue: T?) {
         value = definedValue
     }
-    //infix fun eq(value: T)
-    class FieldEntity<T : Any>(name: String) : ColumnEntity<T>(name) {
-        inline fun <reified T> lineProtocol(): String {
-            when (T::class) {
-                Int::class -> "${value}i"
-                Double::class -> "$value"
 
-                else -> "\"$value\""
-            }
-        }
+    //infix fun eq(value: T)
+    class FieldEntity<T : FieldType<*>>(name: String) : ColumnEntity<T>(name) {
+         fun lineProtocol() =
+                 value?.let {
+                     when(it) {
+                         is FieldType.InfluxInt -> "$name=${it.value}i"
+                         is FieldType.InfluxFloat -> "$name=${it.value}"
+                         is FieldType.InfluxBoolean -> "$name=${it.value}"
+                         else -> "$name=\"$it\""
+                     }
+                 }
     }
+
     class TagEntity<T : Any>(name: String) : ColumnEntity<T>(name) {
         private fun escape() = "$value".replace(" |,|=".toRegex()) { match -> "\\${match.value}" }
 

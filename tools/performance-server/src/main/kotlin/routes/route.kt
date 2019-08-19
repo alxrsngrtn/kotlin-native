@@ -171,7 +171,7 @@ fun router() {
     router.get("/builds/:target/:type/:branch", { request, response ->
         val builds = LocalCache[request.params.target]
         response.json(prepareBuildsResponse(builds, request.params.type, request.params.branch))
-    })
+    })*/
 
     router.get("/branches/:target", { request, response ->
         val builds = LocalCache[request.params.target]
@@ -183,17 +183,17 @@ fun router() {
         response.json(builds.map { buildDescriptionToTokens(it)[0] }.distinct())
     })
 
-    router.get("/clean", { _, response ->
+    /*router.get("/clean", { _, response ->
         LocalCache.clean()
         response.sendStatus(200)
-    })
+    })*/
 
-    router.get("/fill", { _, response ->
+    /*router.get("/fill", { _, response ->
         LocalCache.fill()
         response.sendStatus(200)
-    })
+    })*/
 
-    router.get("/delete/:target", { request, response ->
+    /*router.get("/delete/:target", { request, response ->
         val buildsToDelete: List<String> = request.query.builds.toString().split(",").map { it.trim() }
         val result = LocalCache.delete(request.params.target, buildsToDelete, request.query.user, request.query.key)
         if (result) {

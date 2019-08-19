@@ -2,20 +2,43 @@ package org.jetbrains.influxdb
 
 import kotlin.reflect.KProperty
 
-class InfluxDBConnector <T>(val host: String, val databaseName: String, val port: Int = 8086,
-                        private val user: String? = null, private val password: String? = null,
-                        val postRequestSender: (url: String, body: String, user: String?, password: String?) -> T) {
-    fun query(query: String) {
+object InfluxDBConnector {
+    private lateinit var host: String
+    private lateinit var databaseName: String
+    private var port: Int = 8086
+    private var user: String? = null
+    private var password: String? = null
 
+    fun initConnection(host: String, databaseName: String, port: Int = 8086, user: String? = null,
+                       password: String? = null) {
+        this.host = host
+        this.databaseName = databaseName
+        this.port = port
+        this.user = user
+        this.password = password
     }
-    //fun<T : Measurement, U: Any> select(columns: ColumnEntity<*>, where: (ColumnEntity<U>)->Expression<U>): List<T> {}
+
+    fun query(query: String): Response {
+        checkConnection()
+        val queryUrl = "$host:$port/query?db=$databaseName&q=$query"
+        return sendRequest("GET", queryUrl, user, password, true)
+    }
+
+    private fun checkConnection() = if (!::host.isInitialized || !::databaseName.isInitialized) {
+        error("Please, firstly set connection to Influx database to have opportunity to send requests.")
+    } else { }
+
+    //fun<T: Any> select(measurement: Measurement, columns: Expression<T>): List<T> {}
 
     fun insert(point: Measurement) {
+        checkConnection()
         val description = point.lineProtocol()
-        println(description)
+        val writeUrl = "$host:$port/write?db=$databaseName"
+        sendRequest("POST", writeUrl, user, password, body = description)
     }
 
-    fun insert(points: Collection<Measurement>): T {
+    fun insert(points: Collection<Measurement>) {
+        checkConnection()
         val description  = with(StringBuilder()) {
             var prefix = ""
             points.forEach {
@@ -25,7 +48,7 @@ class InfluxDBConnector <T>(val host: String, val databaseName: String, val port
             toString()
         }
         val writeUrl = "$host:$port/write?db=$databaseName"
-        return postRequestSender(writeUrl, description, user, password)
+        sendRequest("POST", writeUrl, user, password, body = description)
     }
 }
 
@@ -41,13 +64,16 @@ sealed class FieldType<T : Any>(val value: T) {
 open class Measurement(val name: String) {
     var timestamp: ULong? = null
         protected set
-    val fields = mutableListOf<ColumnEntity.FieldEntity<*>>()
-    val tags = mutableListOf<ColumnEntity.TagEntity<*>>()
+    val fields = mutableMapOf<String, ColumnEntity.FieldEntity<*>>()
+    val tags = mutableMapOf<String, ColumnEntity.TagEntity<*>>()
 
     inner class Field<T: FieldType<*>>(val name: String? = null) {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): ColumnEntity.FieldEntity<T> {
-            val field =  ColumnEntity.FieldEntity<T>(name ?: prop.name)
-            fields.add(field)
+            val field = ColumnEntity.FieldEntity<T>(name ?: prop.name)
+            if (field.name in fields.keys) {
+                error("Field ${field.name} already exists in measurement $name")
+            }
+            fields[field.name] = field
             return field
         }
     }
@@ -55,7 +81,10 @@ open class Measurement(val name: String) {
     inner class Tag<T: Any>(val name: String? = null) {
         operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): ColumnEntity.TagEntity<T> {
             val tag = ColumnEntity.TagEntity<T>(name ?: prop.name)
-            tags.add(tag)
+            if (tag.name in tags.keys) {
+                error("Field ${tag.name} already exists in measurement $name")
+            }
+            tags[tag.name] = tag
             return tag
         }
     }
@@ -63,14 +92,14 @@ open class Measurement(val name: String) {
     fun lineProtocol() =
         with(StringBuilder("$name,")) {
             var prefix = ""
-            tags.forEach {
+            tags.values.forEach {
                 it.value?.let {value ->
                     append("${prefix}${it.lineProtocol()}")
                     prefix = ","
                 } ?: println("Tag $it.name isn't initialized.")
             }
             prefix = " "
-            fields.forEach {
+            fields.values.forEach {
                 it.value?.let { value ->
                     append("${prefix}${it.lineProtocol()}")
                     prefix = ","
@@ -82,17 +111,37 @@ open class Measurement(val name: String) {
             toString()
         }
 
-    fun insert(): Boolean {
-        TODO()
+    fun distinct(fieldName: String): InfluxFunction<*> {
+        if (fieldName !in fields.keys) {
+            error("There is no field with $fieldName in measurement $name.")
+        }
+        return fields[fieldName]!!.let { DistinctFunction(it) }
+    }
+
+    fun <T: Any>select(columns: Expression<*>): List<T> {
+        val query = "SELECT ${columns.lineProtocol()} FROM \"$name\""
+        InfluxDBConnector.query(query).then { response ->
+            // Parse response.
+
+        }
     }
 }
 
-sealed class Expression<T: Any>(val name: String, val value: T) {
+abstract class Expression<T: Any>() {
     //infix fun or(Expression<*>)
     //infix fun and(Expression<*>)
+    abstract fun lineProtocol(): String
 }
 
-sealed class ColumnEntity<T : Any>(val name: String) {
+abstract class InfluxFunction<T : Any>(val entity: ColumnEntity<T>) {
+    abstract fun lineProtocol(): String
+}
+
+class DistinctFunction<T : FieldType<*>>(field: ColumnEntity.FieldEntity<T>) : InfluxFunction<T>(field) {
+    override fun lineProtocol() = "distinct(\"${entity.name}\")"
+}
+
+sealed class ColumnEntity<T : Any>(val name: String): Expression<T>() {
     var value: T? = null
         protected set
 
@@ -103,7 +152,7 @@ sealed class ColumnEntity<T : Any>(val name: String) {
 
     //infix fun eq(value: T)
     class FieldEntity<T : FieldType<*>>(name: String) : ColumnEntity<T>(name) {
-         fun lineProtocol() =
+         override fun lineProtocol() =
                  value?.let {
                      when(it) {
                          is FieldType.InfluxInt -> "$name=${it.value}i"
@@ -111,13 +160,13 @@ sealed class ColumnEntity<T : Any>(val name: String) {
                          is FieldType.InfluxBoolean -> "$name=${it.value}"
                          else -> "$name=\"$it\""
                      }
-                 }
+                 } ?: ""
     }
 
     class TagEntity<T : Any>(name: String) : ColumnEntity<T>(name) {
         private fun escape() = "$value".replace(" |,|=".toRegex()) { match -> "\\${match.value}" }
 
-        fun lineProtocol() = "$name=${escape()}"
+        override fun lineProtocol() = "$name=${escape()}"
     }
 }
 

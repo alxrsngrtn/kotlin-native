@@ -179,7 +179,65 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
             }
             return points
         }
+
+        fun fromInfluxJson(data: JsonElement): List<BenchmarkMeasurement> {
+            val points = mutableListOf<BenchmarkMeasurement>()
+            var columnsIndexes: Map<String, Int>
+            if (data is JsonObject) {
+                val results = data.getRequiredField("results") as JsonArray
+                results.map {
+                    if (it is JsonObject) {
+                        val series = it.getRequiredField("series") as JsonArray
+                        series.map {
+                            if (it is JsonObject) {
+                                val columns = it.getRequiredField("columns") as JsonArray
+                                columnsIndexes = columns.mapIndexed{ index, it ->
+                                    (it as JsonLiteral).unquoted() to index
+                                }.toMap()
+                                val values = it.getRequiredField("values") as JsonArray
+                                val point = BenchmarkMeasurement()
+                                point.envMachineCpu = (values[columnsIndexes["environment.machine.cpu"]!!] as JsonLiteral)
+                                        .unquoted()
+                                point.envMachineOs = (values[columnsIndexes["environment.machine.os"]!!] as JsonLiteral)
+                                        .unquoted()
+                                point.envJDKVendor = FieldType.InfluxString(
+                                        (values[columnsIndexes["environment.jdk.vendor"]!!] as JsonLiteral).unquoted())
+                                point.envJDKVersion = FieldType.InfluxString(
+                                        (values[columnsIndexes["environment.jdk.version"]!!] as JsonLiteral).unquoted())
+
+                                point.kotlinBackendType = (values[columnsIndexes["kotlin.backend.type"]!!] as JsonLiteral)
+                                        .unquoted()
+                                point.kotlinBackendVersion = FieldType.InfluxString(
+                                        (values[columnsIndexes["kotlin.backend.version"]!!] as JsonLiteral).unquoted())
+                                point.kotlinBackendFlags = (values[columnsIndexes["environment.machine.os"]!!] as JsonLiteral)
+                                        .unquoted().replace("[", "").replace("]", "")
+                                        .split(',')
+                                point.kotlinVersion = FieldType.InfluxString(
+                                        (values[columnsIndexes["kotlin.kotlinVersion"]!!] as JsonLiteral).unquoted())
+
+                                point.benchmarkName = (values[columnsIndexes["benchmark.name"]!!] as JsonLiteral).unquoted()
+                                point.benchmarkStatus = FieldType.InfluxString(
+                                        (values[columnsIndexes["benchmark.status"]!!] as JsonLiteral).unquoted())
+                                point.benchmarkScore = FieldType.InfluxFloat(
+                                        (values[columnsIndexes["benchmark.score"]!!] as JsonLiteral).double)
+                                point.benchmarkMetric = (values[columnsIndexes["benchmark.metric"]!!] as JsonLiteral).unquoted()
+                                point.benchmarkRuntime = FieldType.InfluxFloat(
+                                        (values[columnsIndexes["benchmark.runtimeInUs"]!!] as JsonLiteral).double)
+                                point.benchmarkRepeat = FieldType.InfluxInt(
+                                        (values[columnsIndexes["benchmark.repeat"]!!] as JsonLiteral).int)
+                                point.benchmarkWarmup = FieldType.InfluxInt(
+                                        (values[columnsIndexes["benchmark.warmup"]!!] as JsonLiteral).int)
+                                points.add(point)
+                            }
+                        }
+                    }
+                }
+            }
+
+            return points
+        }
     }
+    
     // Environment.
     // Machine.
     var envMachineCpu by Tag<String>("environment.machine.cpu")

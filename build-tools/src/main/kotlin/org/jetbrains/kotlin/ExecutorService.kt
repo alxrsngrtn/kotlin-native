@@ -239,7 +239,8 @@ private fun simulator(project: Project) : ExecutorService = object : ExecutorSer
 
     override fun execute(action: Action<in ExecSpec>): ExecResult? = project.exec { execSpec ->
         action.execute(execSpec)
-        with(execSpec) { commandLine = listOf(simctl, "spawn", device, executable) + args }
+        // Starting Xcode 11 `simctl spawn` requires explicit `--standalone` flag.
+        with(execSpec) { commandLine = listOf(simctl, "spawn", "--standalone", device, executable) + args }
     }
 }
 

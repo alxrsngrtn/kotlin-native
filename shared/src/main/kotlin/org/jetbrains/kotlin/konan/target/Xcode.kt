@@ -29,8 +29,7 @@ interface Xcode {
     val appletvsimulatorSdk: String
     // Xcode.app/Contents/Developer/usr
     val additionalTools: String
-    // List of available runtimes
-    val runtimes: String
+    val simulatorRuntimes: String
 
     companion object {
         val current: Xcode by lazy {
@@ -51,8 +50,8 @@ private object CurrentXcode : Xcode {
         File(bitcodeBuildToolPath).parentFile.parentFile.absolutePath
     }
 
-    override val runtimes: String by lazy {
-        xcrun("simctl", "list", "runtimes", "-j")
+    override val simulatorRuntimes: String by lazy {
+        Command("/usr/bin/xcrun", "simctl", "list", "runtimes", "-j").getOutputLines().joinToString(separator = "\n")
     }
     override val macosxSdk by lazy { getSdkPath("macosx") }
     override val iphoneosSdk by lazy { getSdkPath("iphoneos") }

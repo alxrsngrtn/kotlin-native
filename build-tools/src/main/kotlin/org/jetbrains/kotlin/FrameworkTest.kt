@@ -1,7 +1,6 @@
 package org.jetbrains.kotlin
 
 import groovy.lang.Closure
-import kotlinx.serialization.Serializable
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.Task
@@ -87,6 +86,10 @@ open class FrameworkTest : DefaultTask() {
         runTest(testExecutable)
     }
 
+    /**
+     * Returns path to directory that contains `libswiftCore.dylib` for the current
+     * test target.
+     */
     private fun getSwiftLibsPathForTestTarget(): String {
         val target = project.testTarget
         val platform = project.platformManager.platform(target)
@@ -99,8 +102,9 @@ open class FrameworkTest : DefaultTask() {
             KonanTarget.MACOS_X64 -> "macosx"
             else -> throw IllegalStateException("Test target $target is not supported")
         }
-        return when (project.testTarget) {
+        return when (target) {
             KonanTarget.TVOS_X64,
+            KonanTarget.IOS_X64,
             KonanTarget.WATCHOS_X64 -> Xcode.current.getLatestSimulatorRuntimeFor(target, configs.osVersionMin)?.let {
                 "${it.bundlePath}/Contents/Resources/RuntimeRoot/usr/lib/swift"
             } ?: error("Simulator runtime for $target ${configs.osVersionMin} is not available")
@@ -108,21 +112,24 @@ open class FrameworkTest : DefaultTask() {
         }
     }
 
-    private fun runTest(testExecutable: Path) {
+    private fun buildEnvironment(): Map<String, String> {
         val target = project.testTarget
-        val executor = (project.convention.plugins["executor"] as? ExecutorService)
-                ?: throw RuntimeException("Executor wasn't found")
         // Hopefully, lexicographical comparison will work.
         val newMacos = System.getProperty("os.version").compareTo("10.14.4") >= 0
         val dyldLibraryPathKey = when (target) {
             KonanTarget.IOS_X64, KonanTarget.TVOS_X64 -> "SIMCTL_CHILD_DYLD_LIBRARY_PATH"
             else -> "DYLD_LIBRARY_PATH"
         }
-        val environment = if (newMacos && target == KonanTarget.MACOS_X64) emptyMap() else mapOf(
+        return if (newMacos && target == KonanTarget.MACOS_X64) emptyMap() else mapOf(
                 dyldLibraryPathKey to getSwiftLibsPathForTestTarget()
         )
+    }
+
+    private fun runTest(testExecutable: Path) {
+        val executor = (project.convention.plugins["executor"] as? ExecutorService)
+                ?: throw RuntimeException("Executor wasn't found")
         val (stdOut, stdErr, exitCode) = runProcess(
-                executor = executor.add(Action { it.environment = environment })::execute,
+                executor = executor.add(Action { it.environment = buildEnvironment() })::execute,
                 executable = testExecutable.toString())
 
         println("""

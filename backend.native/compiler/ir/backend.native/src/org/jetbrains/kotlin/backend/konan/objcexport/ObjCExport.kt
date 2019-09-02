@@ -148,7 +148,7 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
             KonanTarget.IOS_ARM32, KonanTarget.IOS_ARM64 -> "iPhoneOS"
             KonanTarget.IOS_X64 -> "iPhoneSimulator"
             KonanTarget.TVOS_ARM64 -> "AppleTVOS"
-            KonanTarget.TVOS_X64 -> "AppleTVSimulator" // TODO: validate me
+            KonanTarget.TVOS_X64 -> "AppleTVSimulator"
             KonanTarget.MACOS_X64 -> "MacOSX"
             else -> error(target)
         }

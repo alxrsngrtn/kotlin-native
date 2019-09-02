@@ -70,10 +70,39 @@ class ExecClang(private val project: Project) {
         return this.execClang(konanArgs(target), closure)
     }
 
+    fun execXcodeClang(target: String?, closure: Closure<in ExecSpec>): ExecResult {
+        return this.execClang(konanArgs(target), closure)
+    }
+
     // These ones are private, so one has to choose either Bare or Konan.
 
     private fun execClang(defaultArgs: List<String>, closure: Closure<in ExecSpec>): ExecResult {
         return this.execClang(defaultArgs, ConfigureUtil.configureUsing(closure))
+    }
+
+    private fun execXcodeClang(defaultArgs: List<String>, action: Action<in ExecSpec>): ExecResult {
+        val extendedAction = object : Action<ExecSpec> {
+            override fun execute(execSpec: ExecSpec) {
+                action.execute(execSpec)
+
+                execSpec.apply {
+                    if (executable == null) {
+                        executable = "clang"
+                    }
+
+                    if (listOf("clang", "clang++").contains(executable)) {
+                        executable = "${Xcode.current.toolchain}/usr/bin/$executable" }
+                    else {
+                        throw GradleException("unsupported clang executable: $executable")
+                    }
+                    val hostPlatform = project.findProperty("hostPlatform") as Platform
+                    environment["PATH"] = project.files(hostPlatform.clang.clangPaths).asPath +
+                            java.io.File.pathSeparator + environment["PATH"]
+                    args(defaultArgs)
+                }
+            }
+        }
+        return project.exec(extendedAction)
     }
 
     private fun execClang(defaultArgs: List<String>, action: Action<in ExecSpec>): ExecResult {
@@ -92,7 +121,6 @@ class ExecClang(private val project: Project) {
                     else {
                         throw GradleException("unsupported clang executable: $executable")
                     }
-
                     val hostPlatform = project.findProperty("hostPlatform") as Platform
                     environment["PATH"] = project.files(hostPlatform.clang.clangPaths).asPath +
                             java.io.File.pathSeparator + environment["PATH"]

@@ -108,7 +108,7 @@ class CompileCppToBitcode extends DefaultTask {
         File objDir = this.getObjDir()
         objDir.mkdirs()
 
-        project.execKonanClang(this.target) {
+        project.execXcodeClang(this.target) {
             workingDir objDir
             executable "clang++"
             args '-std=c++11'

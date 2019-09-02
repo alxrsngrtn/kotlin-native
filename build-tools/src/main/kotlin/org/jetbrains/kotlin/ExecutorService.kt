@@ -86,6 +86,7 @@ fun create(project: Project): ExecutorService {
 
         KonanTarget.IOS_X64 -> simulator(project)
         KonanTarget.TVOS_X64 -> simulator(project)
+        KonanTarget.WATCHOS_X64 -> simulator(project)
 
         else -> {
             if (project.hasProperty("remote")) sshExecutor(project)
@@ -220,6 +221,7 @@ private fun simulator(project: Project) : ExecutorService = object : ExecutorSer
         val sdk = when (target) {
             KonanTarget.TVOS_X64 -> Xcode.current.appletvsimulatorSdk
             KonanTarget.IOS_X64 -> Xcode.current.iphonesimulatorSdk
+            KonanTarget.WATCHOS_X64 -> Xcode.current.watchsimulatorSdk
             else -> error("Unexpected simulation target: $target")
         }
         val out = ByteArrayOutputStream()
@@ -234,6 +236,7 @@ private fun simulator(project: Project) : ExecutorService = object : ExecutorSer
     private val device = project.findProperty("iosDevice")?.toString() ?: when (target) {
         KonanTarget.TVOS_X64 -> "Apple TV 4K"
         KonanTarget.IOS_X64 -> "iPhone 6"
+        KonanTarget.WATCHOS_X64 -> "Apple Watch Series 4 - 40mm"
         else -> error("Unexpected simulation target: $target")
     }
 

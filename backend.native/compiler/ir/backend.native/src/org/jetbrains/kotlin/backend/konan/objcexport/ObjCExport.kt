@@ -150,6 +150,8 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
             KonanTarget.TVOS_ARM64 -> "AppleTVOS"
             KonanTarget.TVOS_X64 -> "AppleTVSimulator"
             KonanTarget.MACOS_X64 -> "MacOSX"
+            KonanTarget.WATCHOS_ARM64 -> "watchOS"
+            KonanTarget.WATCHOS_X64 -> "watchSimulator"
             else -> error(target)
         }
         val properties = context.config.platform.configurables as AppleConfigurables

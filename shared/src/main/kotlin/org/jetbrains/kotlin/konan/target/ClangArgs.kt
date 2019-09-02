@@ -75,6 +75,8 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
                 KonanTarget.TVOS_X64 ->
                     listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-mtvos-simulator-version-min=12.2")
 
+                KonanTarget.WATCHOS_X64 -> listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-mwatchsimulator-version-min=5.0")
+
                 KonanTarget.IOS_X64 ->
                     listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=9.0.0")
 
@@ -111,7 +113,6 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
 
                 KonanTarget.ANDROID_X64 -> TODO("implement me")
                 KonanTarget.WATCHOS_ARM64 -> TODO("implement me")
-                KonanTarget.WATCHOS_X64 -> TODO("implement me")
                 KonanTarget.TVOS_ARM64 -> TODO("implement me")
                 KonanTarget.TVOS_X64 -> TODO("implement me")
 
@@ -242,6 +243,13 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
                         "-DKONAN_CORE_SYMBOLICATION=1",
                         "-DKONAN_HAS_CXX11_EXCEPTION_FUNCTIONS=1")
 
+            KonanTarget.WATCHOS_X64 ->
+                listOf("-DKONAN_OBJC_INTEROP=1",
+                        "-DKONAN_IOS=1",
+                        "-DKONAN_X64=1",
+                        "-DKONAN_CORE_SYMBOLICATION=1",
+                        "-DKONAN_HAS_CXX11_EXCEPTION_FUNCTIONS=1")
+
             KonanTarget.ANDROID_ARM32 ->
                 listOf("-D__ANDROID__",
                         "-DUSE_GCC_UNWIND=1",
@@ -273,7 +281,6 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
 
             KonanTarget.ANDROID_X64 -> TODO("implement me")
             KonanTarget.WATCHOS_ARM64 -> TODO("implement me")
-            KonanTarget.WATCHOS_X64 -> TODO("implement me")
 
             is KonanTarget.ZEPHYR ->
                 listOf( "-DKONAN_ZEPHYR=1",
@@ -330,11 +337,17 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
             // We workaround the problem with -isystem flag below.
             listOf("-isystem", "$absoluteLlvmHome/lib/clang/$llvmVersion/include", *clangArgs)
 
+    private val clangPath = if (configurables is AppleConfigurables) {
+        "${configurables.targetToolchain}/bin/clang"
+    } else {
+        "${absoluteLlvmHome}/bin/clang"
+    }
+
     val targetClangCmd
-            = listOf("${absoluteLlvmHome}/bin/clang") + clangArgs
+            = listOf(clangPath) + clangArgs
 
     val targetClangXXCmd
-            = listOf("${absoluteLlvmHome}/bin/clang++") + clangArgs
+            = listOf("$clangPath++") + clangArgs
 
     fun clangC(vararg userArgs: String) = targetClangCmd + userArgs.asList()
 

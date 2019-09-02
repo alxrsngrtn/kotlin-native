@@ -52,6 +52,7 @@ private class LlvmPipelineConfiguration(context: Context) {
         KonanTarget.IOS_ARM64 -> "cyclone"
         KonanTarget.IOS_X64 -> "core2"
         KonanTarget.TVOS_ARM64 -> "cyclone"
+        KonanTarget.WATCHOS_X64,
         KonanTarget.TVOS_X64 -> "core2"
         KonanTarget.LINUX_X64 -> "x86-64"
         KonanTarget.MINGW_X86 -> "pentium4"
@@ -65,7 +66,6 @@ private class LlvmPipelineConfiguration(context: Context) {
         KonanTarget.LINUX_MIPSEL32 -> "mips32r2"
         KonanTarget.ANDROID_X64,
         KonanTarget.WATCHOS_ARM64,
-        KonanTarget.WATCHOS_X64,
         KonanTarget.WASM32,
         is KonanTarget.ZEPHYR -> error("There is no support for ${target.name} target yet.")
     }

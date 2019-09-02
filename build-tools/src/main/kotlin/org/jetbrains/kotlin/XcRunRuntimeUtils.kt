@@ -14,7 +14,7 @@ private fun compareStringsAsVersions(version1: String, version2: String): Int {
     val version1 = version1.split('.').map { it.toInt() }
     val version2 = version2.split('.').map { it.toInt() }
     val minimalLength = min(version1.size, version2.size)
-    for (index in 0..minimalLength) {
+    for (index in 0 until minimalLength) {
         if (version1[index] < version2[index]) return -1;
         if (version1[index] > version2[index]) return 1;
     }

@@ -31,7 +31,7 @@ public open class Throwable(open val message: String?, open val cause: Throwable
         getStackTraceStrings(stackTrace)
     }
 
-    public fun getStackTrace(): Array<String> = stackTraceStrings
+    public fun getStackTrace(): Array<String> = stackTraceStrings.copyOf()
 
     public fun printStackTrace(): Unit = dumpStackTrace { println(it) }
 

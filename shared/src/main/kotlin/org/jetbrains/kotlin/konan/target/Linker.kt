@@ -146,11 +146,16 @@ open class MacOSBasedLinker(targetProperties: AppleConfigurables)
     private val dsymutil = "$absoluteLlvmHome/bin/llvm-dsymutil"
 
     private fun provideCompilerRtLibrary(libraryName: String): String? {
-        val prefix = when (val family = target.family) {
-            Family.OSX -> "osx"
-            // TODO: Introduce Family.TVOS
-            Family.IOS -> if (target == KonanTarget.TVOS_ARM64 || target == KonanTarget.TVOS_X64) "tvos" else "ios"
-            else -> error("Family $family is unsupported")
+        val prefix = when (target) {
+            KonanTarget.IOS_ARM32,
+            KonanTarget.IOS_ARM64,
+            KonanTarget.IOS_X64 -> "ios"
+            KonanTarget.WATCHOS_ARM64,
+            KonanTarget.WATCHOS_X64 -> "watchos"
+            KonanTarget.TVOS_ARM64,
+            KonanTarget.TVOS_X64 -> "tvos"
+            KonanTarget.MACOS_X64 -> "osx"
+            else -> error("Target $target is unsupported")
         }
         val suffix = if (libraryName.isNotEmpty() && (target == KonanTarget.TVOS_X64 || target == KonanTarget.IOS_X64)) {
             "sim"

@@ -182,15 +182,13 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
 
         """.trimIndent())
 
-        val uiDeviceFamilyValues = if (target.isTvOs) {
-            """
-                |<integer>3</integer>
-            """.trimIndent()
+        // 1 - iPhone
+        // 2 - iPad
+        // 3 - AppleTV
+        val uiDeviceFamilyValues = if (target.isTvOsBased) {
+            listOf(3)
         } else {
-            """
-                |<integer>1</integer>
-                |<integer>2</integer>
-            """.trimIndent()
+            listOf(1, 2)
         }
         contents.append(when (target.family) {
             Family.IOS -> """
@@ -198,7 +196,9 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
                 |    <string>$minimumOsVersion</string>
                 |    <key>UIDeviceFamily</key>
                 |    <array>
-                |       $uiDeviceFamilyValues
+                ${uiDeviceFamilyValues.joinToString(separator = "\n") { 
+                "|       <integer>$it</integer>" 
+            }}
                 |    </array>
 
                 """.trimMargin()
@@ -206,7 +206,7 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
             else -> error(target)
         })
 
-        if (target.architecture == Architecture.ARM64) {
+        if (target == KonanTarget.IOS_ARM64) {
             contents.append("""
                 |    <key>UIRequiredDeviceCapabilities</key>
                 |    <array>

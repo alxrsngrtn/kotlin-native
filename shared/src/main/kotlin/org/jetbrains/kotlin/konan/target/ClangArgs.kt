@@ -37,6 +37,12 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
         configurables.targetArg
     else null
 
+    private val osVersionMin: String
+            get() {
+                require(configurables is AppleConfigurables)
+                return configurables.osVersionMin
+            }
+
     val specificClangArgs: List<String>
         get() {
             val result = when (target) {
@@ -74,22 +80,22 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
                     listOf("-target", targetArg!!, "--sysroot=$absoluteTargetSysRoot", "-Xclang", "-flto-visibility-public-std")
 
                 KonanTarget.MACOS_X64 ->
-                    listOf("--sysroot=$absoluteTargetSysRoot", "-mmacosx-version-min=10.11")
+                    listOf("--sysroot=$absoluteTargetSysRoot", "-mmacosx-version-min=$osVersionMin")
 
                 KonanTarget.IOS_ARM32 ->
-                    listOf("-stdlib=libc++", "-arch", "armv7", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=9.0.0")
+                    listOf("-stdlib=libc++", "-arch", "armv7", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=$osVersionMin")
 
                 KonanTarget.IOS_ARM64 ->
-                    listOf("-stdlib=libc++", "-arch", "arm64", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=9.0.0")
+                    listOf("-stdlib=libc++", "-arch", "arm64", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=$osVersionMin")
 
                 KonanTarget.TVOS_ARM64 ->
-                    listOf("-stdlib=libc++", "-arch", "arm64", "-isysroot", absoluteTargetSysRoot, "-mtvos-version-min=12.2")
+                    listOf("-stdlib=libc++", "-arch", "arm64", "-isysroot", absoluteTargetSysRoot, "-mtvos-version-min=$osVersionMin")
 
                 KonanTarget.TVOS_X64 ->
-                    listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-mtvos-simulator-version-min=12.2")
+                    listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-mtvos-simulator-version-min=$osVersionMin")
 
                 KonanTarget.IOS_X64 ->
-                    listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=9.0.0")
+                    listOf("-stdlib=libc++", "-isysroot", absoluteTargetSysRoot, "-miphoneos-version-min=$osVersionMin")
 
                 KonanTarget.ANDROID_ARM32, KonanTarget.ANDROID_ARM64,
                 KonanTarget.ANDROID_X86, KonanTarget.ANDROID_X64 -> {

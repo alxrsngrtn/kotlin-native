@@ -23,7 +23,7 @@ internal fun determineLinkerOutput(context: Context): LinkerOutputKind =
 internal val KonanTarget.isAppleTarget: Boolean
         get() = family == Family.IOS || family == Family.OSX
 
-internal val KonanTarget.isTvOs: Boolean
+internal val KonanTarget.isTvOsBased: Boolean
         get() = this == KonanTarget.TVOS_ARM64 || this == KonanTarget.TVOS_X64
 
 // TODO: We have a Linker.kt file in the shared module.

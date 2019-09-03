@@ -15,21 +15,17 @@ private fun compareStringsAsVersions(version1: String, version2: String): Int {
     val version2 = version2.split('.').map { it.toInt() }
     val minimalLength = min(version1.size, version2.size)
     for (index in 0 until minimalLength) {
-        if (version1[index] < version2[index]) return -1;
-        if (version1[index] > version2[index]) return 1;
+        if (version1[index] < version2[index]) return -1
+        if (version1[index] > version2[index]) return 1
     }
-    return when {
-        version1.size == version2.size -> 0
-        version1.size < version2.size -> -1
-        else -> 1
-    }
+    return version1.size.compareTo(version2.size)
 }
 
 /**
  * Returns parsed output of `xcrun simctl list runtimes -j`.
  */
 private fun Xcode.getSimulatorRuntimeDescriptors(): List<SimulatorRuntimeDescriptor> =
-     Json.Companion.nonstrict.parse(ListRuntimesReport.serializer(), this.simulatorRuntimes).runtimes
+     Json.nonstrict.parse(ListRuntimesReport.serializer(), this.simulatorRuntimes).runtimes
 
 /**
  * Returns first available simulator runtime for [target] with at least [osMinVersion] OS version.
@@ -46,7 +42,7 @@ fun Xcode.getLatestSimulatorRuntimeFor(target: KonanTarget, osMinVersion: String
     }
 }
 
-// Result of `xcrun simctl list runtimes -j`
+// Result of `xcrun simctl list runtimes -j`.
 @Serializable
 data class ListRuntimesReport(
         val runtimes: List<SimulatorRuntimeDescriptor>

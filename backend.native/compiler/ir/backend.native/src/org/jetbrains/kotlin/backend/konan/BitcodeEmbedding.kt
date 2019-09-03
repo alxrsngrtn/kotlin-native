@@ -1,10 +1,7 @@
 package org.jetbrains.kotlin.backend.konan
 
 
-import org.jetbrains.kotlin.backend.konan.BitcodeEmbedding.bitcodeEmbeddingMode
 import org.jetbrains.kotlin.konan.target.CompilerOutputKind
-import org.jetbrains.kotlin.konan.target.Family
-import org.jetbrains.kotlin.konan.target.KonanTarget
 
 object BitcodeEmbedding {
 
@@ -24,15 +21,9 @@ object BitcodeEmbedding {
         Mode.FULL -> listOf("-fembed-bitcode=all")
     }
 
-    // TODO: We cannot produce programs due to `-alias` linked flag.
-    private fun KonanConfig.shouldForceBitcodeEmbedding() =
-            target.isTvOs && produce != CompilerOutputKind.PROGRAM
-
     private val KonanConfig.bitcodeEmbeddingMode: Mode
-        get() = when {
-            shouldForceBitcodeEmbedding() -> if (debug) Mode.MARKER else Mode.FULL
-            else -> configuration.get(KonanConfigKeys.BITCODE_EMBEDDING_MODE)!!
-        }.also {
+        get() = configuration.get(KonanConfigKeys.BITCODE_EMBEDDING_MODE)!!.also {
+            // TODO: We cannot produce programs due to `-alias` linked flag.
             require(it == Mode.NONE || this.produce == CompilerOutputKind.FRAMEWORK) {
                 "${it.name.toLowerCase()} bitcode embedding mode is not supported when producing ${this.produce.name.toLowerCase()}"
             }

@@ -150,7 +150,7 @@ open class FrameworkTest : DefaultTask() {
         val bitcodeBuildTool = "${configurables.absoluteAdditionalToolsDir}/bin/bitcode-build-tool"
         val ldPath = "${configurables.absoluteTargetToolchain}/usr/bin/ld"
         val sdk = when (testTarget) {
-            KonanTarget.IOS_X64, KonanTarget.TVOS_X64 -> return // bitcode-build-tool doesn't support iPhone Simulator.
+            KonanTarget.IOS_X64, KonanTarget.TVOS_X64 -> return // bitcode-build-tool doesn't support simulators.
             KonanTarget.IOS_ARM64, KonanTarget.IOS_ARM32 -> Xcode.current.iphoneosSdk
             KonanTarget.MACOS_X64 -> Xcode.current.macosxSdk
             KonanTarget.TVOS_ARM64 -> Xcode.current.appletvosSdk

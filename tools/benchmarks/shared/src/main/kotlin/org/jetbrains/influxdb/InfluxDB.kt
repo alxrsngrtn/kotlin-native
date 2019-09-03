@@ -18,10 +18,10 @@ object InfluxDBConnector {
         this.password = password
     }
 
-    fun query(query: String): Response {
+    fun query(query: String) {
         checkConnection()
         val queryUrl = "$host:$port/query?db=$databaseName&q=$query"
-        return sendRequest("GET", queryUrl, user, password, true)
+        sendRequest("GET", queryUrl, user, password, true)
     }
 
     private fun checkConnection() = if (!::host.isInitialized || !::databaseName.isInitialized) {
@@ -120,10 +120,11 @@ open class Measurement(val name: String) {
 
     fun <T: Any>select(columns: Expression<*>): List<T> {
         val query = "SELECT ${columns.lineProtocol()} FROM \"$name\""
-        InfluxDBConnector.query(query).then { response ->
+        InfluxDBConnector.query(query)/*.then { response ->
             // Parse response.
-
-        }
+println(response)
+        }*/
+        return listOf()
     }
 }
 

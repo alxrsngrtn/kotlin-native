@@ -1,9 +1,7 @@
 package org.jetbrains.influxdb
 
-actual typealias CommonPromise = Promise
-
 actual fun sendRequest(method: String, url: String, user: String? = null, password: String? = null,
-                       acceptJsonContentType: Boolean = false, body: String? = null): CommonPromise<String> {
+                       acceptJsonContentType: Boolean = false, body: String? = null): Promise<String> {
     val request = require("node-fetch")
     val headers = mutableListOf<Pair<String, String>>()
     if (user != null && password != null) {

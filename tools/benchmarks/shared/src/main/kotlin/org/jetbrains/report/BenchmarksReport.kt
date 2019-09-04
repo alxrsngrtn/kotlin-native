@@ -84,7 +84,7 @@ class BenchmarksReport(val env: Environment, benchmarksList: List<BenchmarkResul
         }
         val mergedBenchmarks = HashMap<String, List<BenchmarkResult>>(benchmarks)
         mergedBenchmarks.putAll(other.benchmarks)
-        return BenchmarksReport(env, mergedBenchmarks.flatMap{it.value}, compiler)
+        return BenchmarksReport(env, mergedBenchmarks.flatMap { it.value }, compiler)
     }
 }
 

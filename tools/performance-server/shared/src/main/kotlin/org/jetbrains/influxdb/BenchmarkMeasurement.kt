@@ -38,7 +38,7 @@ class CommitsList(data: JsonElement): ConvertedFromJson {
 data class BuildInfo(val number: String, val startTime: String, val endTime: String, val commitsList: CommitsList,
                      val branch: String)
 
-class GoldenResultMeasurement(name: String, metric: String, score: Double) : Measurement("goldenResults") {
+class GoldenResultMeasurement(name: String = "", metric: String = "", score: Double = 0.0): Measurement("goldenResults") {
     var benchmarkName by Tag<String>("benchmark.name")
     var benchmarkScore by Field<FieldType.InfluxFloat>("benchmark.score")
     var benchmarkMetric by Tag<String>("benchmark.metric")
@@ -47,6 +47,55 @@ class GoldenResultMeasurement(name: String, metric: String, score: Double) : Mea
         benchmarkName = name
         benchmarkScore = FieldType.InfluxFloat(score)
         benchmarkMetric = metric
+    }
+
+    override fun fromInfluxJson(data: JsonElement): List<Measurement> {
+        val points = mutableListOf<GoldenResultMeasurement>()
+        var columnsIndexes: Map<String, Int>
+        if (data is JsonObject) {
+            val results = data.getRequiredField("results") as JsonArray
+            results.map {
+                if (it is JsonObject) {
+                    val series = it.getRequiredField("series") as JsonArray
+                    series.map {
+                        if (it is JsonObject) {
+                            val columns = it.getRequiredField("columns") as JsonArray
+                            columnsIndexes = columns.mapIndexed{ index, it ->
+                                (it as JsonLiteral).unquoted() to index
+                            }.toMap()
+                            val valuesArrays = it.getRequiredField("values") as JsonArray
+                            valuesArrays.forEach {
+                                val values = it as JsonArray
+                                val name = (values[columnsIndexes["benchmark.name"]!!] as JsonLiteral).unquoted()
+                                val score = (values[columnsIndexes["benchmark.score"]!!] as JsonLiteral).double
+                                val metric = (values[columnsIndexes["benchmark.metric"]!!] as JsonLiteral).unquoted()
+                                points.add(GoldenResultMeasurement(name, metric, score))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return points
+    }
+}
+
+fun List<BenchmarkMeasurement>.toReport(): BenchmarksReport? {
+    return this.firstOrNull()?. let {
+        // Create common part of report.
+        val machine = Environment.Machine(it.envMachineCpu!!, it.envMachineOs!!)
+        val jdk = Environment.JDKInstance(it.envJDKVersion!!.value, it.envJDKVendor!!.value)
+        val environment = Environment(machine, jdk)
+        val backend = Compiler.Backend(Compiler.backendTypeFromString(it.kotlinBackendType!!)!!,
+                it.kotlinBackendVersion!!.value, it.kotlinBackendFlags!!)
+        val compiler = Compiler(backend, it.kotlinVersion!!.value)
+        val benchmarksList = this.map {
+            BenchmarkResult(it.benchmarkName!!, BenchmarkResult.statusFromString(it.benchmarkStatus!!.value)!!,
+                    it.benchmarkScore!!.value, BenchmarkResult.metricFromString(it.benchmarkMetric!!)!!,
+                    it.benchmarkRuntime!!.value, it.benchmarkRepeat!!.value, it.benchmarkWarmup!!.value)
+        }
+        BenchmarksReport(environment, benchmarksList, compiler)
     }
 }
 
@@ -90,10 +139,6 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                 }
             }
             return points
-        }
-
-        fun List<BenchmarkMeasurement>.toReport(): BenchmarksReport {
-            TODO()
         }
 
         fun create(data: JsonElement, buildInfo: BuildInfo? = null): List<BenchmarkMeasurement> {
@@ -179,23 +224,27 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
             }
             return points
         }
+    }
 
-        fun fromInfluxJson(data: JsonElement): List<BenchmarkMeasurement> {
-            val points = mutableListOf<BenchmarkMeasurement>()
-            var columnsIndexes: Map<String, Int>
-            if (data is JsonObject) {
-                val results = data.getRequiredField("results") as JsonArray
-                results.map {
-                    if (it is JsonObject) {
-                        val series = it.getRequiredField("series") as JsonArray
-                        series.map {
-                            if (it is JsonObject) {
-                                val columns = it.getRequiredField("columns") as JsonArray
-                                columnsIndexes = columns.mapIndexed{ index, it ->
-                                    (it as JsonLiteral).unquoted() to index
-                                }.toMap()
-                                val values = it.getRequiredField("values") as JsonArray
-                                val point = BenchmarkMeasurement()
+    override fun fromInfluxJson(data: JsonElement): List<Measurement> {
+        println("AAAAAAAAA")
+        val points = mutableListOf<BenchmarkMeasurement>()
+        var columnsIndexes: Map<String, Int>
+        if (data is JsonObject) {
+            val results = data.getRequiredField("results") as JsonArray
+            results.map {
+                if (it is JsonObject) {
+                    val series = it.getRequiredField("series") as JsonArray
+                    series.map {
+                        if (it is JsonObject) {
+                            val columns = it.getRequiredField("columns") as JsonArray
+                            columnsIndexes = columns.mapIndexed{ index, it ->
+                                (it as JsonLiteral).unquoted() to index
+                            }.toMap()
+                            val valuesArrays = it.getRequiredField("values") as JsonArray
+                            val point = BenchmarkMeasurement()
+                            valuesArrays.forEach {
+                                val values = it as JsonArray
                                 point.envMachineCpu = (values[columnsIndexes["environment.machine.cpu"]!!] as JsonLiteral)
                                         .unquoted()
                                 point.envMachineOs = (values[columnsIndexes["environment.machine.os"]!!] as JsonLiteral)
@@ -233,9 +282,9 @@ class BenchmarkMeasurement : Measurement("benchmarks") {
                     }
                 }
             }
-
-            return points
         }
+
+        return points
     }
     
     // Environment.

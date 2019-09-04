@@ -118,10 +118,8 @@ fun buildDescriptionToTokens(buildDescription: String): List<String> {
 fun router() {
     val express = require("express")
     val router = express.Router()
-    val dbConnector = InfluxDBConnector("https://biff-9a16f218.influxcloud.net", "kotlin_native",
-            user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq") { url, body, user, password ->
-        sendRequest(RequestMethod.POST,url, user, password, body = body)
-    }
+    InfluxDBConnector.initConnection("https://biff-9a16f218.influxcloud.net", "kotlin_native",
+            user = "elena_lepikina", password = "KMFBsyhrae6gLrCZ4Tmq")
 
     // Register build on Bintray.
     router.post("/register", { request, response ->
@@ -139,7 +137,7 @@ fun router() {
                                     commitsList, buildInfo.branch))
                     println("Get results")
                     // Save results in database.
-                    dbConnector.insert(results).then { dbResponce ->
+                    InfluxDBConnector.insert(results).then { _ ->
                         response.sendStatus(200)
                     }.catch {
                         response.sendStatus(400)
@@ -155,7 +153,7 @@ fun router() {
         val resultPoints = goldenResultsInfo.goldenResults.map {
             GoldenResultMeasurement(it.benchmarkName, it.metric, it.value)
         }
-        dbConnector.insert(resultPoints).then { dbResponce ->
+        InfluxDBConnector.insert(resultPoints).then { _ ->
             response.sendStatus(200)
         }.catch {
             response.sendStatus(400)
@@ -168,28 +166,72 @@ fun router() {
         response.json(prepareBuildsResponse(builds, request.params.type, request.params.branch, request.params.id))
     })
 
-    router.get("/builds/:target/:type/:branch", { request, response ->
+    router.get("/builds/:target/:type/:branch/:id", { request, response ->
         val builds = LocalCache[request.params.target]
         response.json(prepareBuildsResponse(builds, request.params.type, request.params.branch))
     })*/
 
+    router.get("/metricValue/:target/:type/:branch/:metric", { request, response ->
+        val measurement = BenchmarkMeasurement()
+        val samples = request.query?.samples.toString().split(",").map { it.trim() }
+        val agregation = request.query?.agr.toString() ?: "geomean"
+        val metric = request.params.metric
+
+        // Get golden results.
+        val golden = GoldenResultMeasurement()
+        val goldenResults = golden.select(golden.all()).then { results ->
+            val parsedNormalizeResults = mutableMapOf<String, MutableMap<String, Double>>()
+            (results as List<GoldenResultMeasurement>).forEach {
+                parsedNormalizeResults.getOrPut(it.benchmarkName!!, { mutableMapOf<String, Double>() })[it.benchmarkMetric!!] = it.benchmarkScore!!.value
+            }
+            parsedNormalizeResults
+        }
+
+        val buildsNumbers = InfluxDBConnector.select(measurement.distinct("build.number"),
+                measurement.field("build.number")
+                        .select((measurement.tag("environment.machine.os") eq request.params.target) and
+                                /*(measurement.field("build.number") match ".+-${request.params.type}-.+") and*/
+                                (measurement.field("build.branch") eq FieldType.InfluxString("${request.params.branch}")))).then { dbResponse ->
+            dbResponse.toString().replace("\\[|\\]".toRegex(), "").split(",")
+        }
+
+        Promise.all(arrayOf(buildsNumbers, goldenResults)).then { results ->
+            val (buildsNumbers, goldenResults) = results
+            (buildsNumbers as List<String>).forEach {
+                if (it.contains("${request.params.type}")) {
+                    // Get points for this build.
+                    measurement.select(measurement.all(), (measurement.tag("environment.machine.os") eq request.params.target) and
+                            (measurement.field("build.number") eq FieldType.InfluxString(it))).then { dbResponse ->
+                        val report = (dbResponse as List<BenchmarkMeasurement>).toReport()
+                        SummaryBenchmarksReport(report).getResultsByMetric(metric, agregation == "geomean", samples, goldenResults)
+                    }
+                }
+            }
+        }
+    })
+
     router.get("/branches/:target", { request, response ->
-        val builds = LocalCache[request.params.target]
-        response.json(builds.map { buildDescriptionToTokens(it)[3] }.distinct())
+        val measurement = BenchmarkMeasurement()
+
+        InfluxDBConnector.select(measurement.distinct("build.branch"),
+                measurement.field("build.branch")
+                        .select(measurement.tag("environment.machine.os") eq request.params.target)).then { dbResponse ->
+            response.json(dbResponse)
+        }
     })
 
     router.get("/buildsNumbers/:target", { request, response ->
-        val builds = LocalCache[request.params.target]
-        response.json(builds.map { buildDescriptionToTokens(it)[0] }.distinct())
+        val measurement = BenchmarkMeasurement()
+
+        InfluxDBConnector.select(measurement.distinct("build.number"),
+                measurement.field("build.number")
+                        .select(measurement.tag("environment.machine.os") eq request.params.target)).then { dbResponse ->
+            response.json(dbResponse)
+        }
     })
 
     /*router.get("/clean", { _, response ->
         LocalCache.clean()
-        response.sendStatus(200)
-    })*/
-
-    /*router.get("/fill", { _, response ->
-        LocalCache.fill()
         response.sendStatus(200)
     })*/
 
@@ -209,41 +251,6 @@ fun router() {
     })
 
     return router
-}
-
-fun getAuth(user: String, password: String): String {
-    val buffer = js("Buffer").from(user + ":" + password)
-    val based64String = buffer.toString("base64")
-    return "Basic " + based64String
-}
-
-enum class RequestMethod {
-    POST, GET, PUT
-}
-
-fun sendRequest(method: RequestMethod, url: String, user: String? = null, password: String? = null,
-                acceptJsonContentType: Boolean = false, body: String? = null) : Promise<String> {
-    val request = require("node-fetch")
-    val headers = mutableListOf<Pair<String, String>>()
-    if (user != null && password != null) {
-        headers.add("Authorization" to getAuth(user, password))
-    }
-    if (acceptJsonContentType) {
-        headers.add("Accept" to "application/json")
-    }
-    return request(url,
-            json(
-                    "method" to method.toString(),
-                    "headers" to json(*(headers.toTypedArray())),
-                    "body" to body
-            )
-    ).then { response ->
-        if (!response.ok)
-            error("Error during getting response from $url\n" +
-                    "${response}")
-        else
-            response.text()
-    }
 }
 
 fun sendUploadRequest(url: String, fileContent: String, user: String? = null, password: String? = null) {

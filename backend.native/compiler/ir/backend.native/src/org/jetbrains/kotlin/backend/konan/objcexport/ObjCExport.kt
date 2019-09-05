@@ -187,18 +187,18 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
         """.trimIndent())
 
         fun addUiDeviceFamilies(vararg values: Int) {
-            val xmlValues = values.joinToString(separator = "\n       ") {
-                "<integer>$it</integer>"
+            val xmlValues = values.joinToString(separator = "\n") {
+                "        <integer>$it</integer>"
             }
             contents.append("""
                 |    <key>MinimumOSVersion</key>
                 |    <string>$minimumOsVersion</string>
                 |    <key>UIDeviceFamily</key>
                 |    <array>
-                |       $xmlValues
+                |$xmlValues       
                 |    </array>
-                """.trimMargin()
-            )
+
+                """.trimMargin())
         }
 
         // UIDeviceFamily mapping:

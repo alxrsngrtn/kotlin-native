@@ -130,8 +130,6 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
                 KonanTarget.WATCHOS_ARM32 -> TODO("implement me")
                 KonanTarget.WATCHOS_X64 -> TODO("implement me")
                 KonanTarget.WATCHOS_X86 -> TODO("implement me")
-                KonanTarget.TVOS_ARM64 -> TODO("implement me")
-                KonanTarget.TVOS_X64 -> TODO("implement me")
 
                 is KonanTarget.ZEPHYR ->
                     listOf("-target", targetArg!!,
@@ -311,9 +309,6 @@ class ClangArgs(private val configurables: Configurables) : Configurables by con
             KonanTarget.WATCHOS_ARM32 -> TODO("implement me")
             KonanTarget.WATCHOS_X64 -> TODO("implement me")
             KonanTarget.WATCHOS_X86 -> TODO("implement me")
-            KonanTarget.TVOS_ARM64 -> TODO("implement me")
-            KonanTarget.TVOS_X64 -> TODO("implement me")
-
 
             is KonanTarget.ZEPHYR ->
                 listOf( "-DKONAN_ZEPHYR=1",

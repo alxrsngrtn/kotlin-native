@@ -13,7 +13,6 @@ import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.konan.PrimitiveBinaryType
 import org.jetbrains.kotlin.backend.konan.RuntimeNames
 import org.jetbrains.kotlin.backend.konan.ir.*
-import org.jetbrains.kotlin.backend.konan.isAppleTarget
 import org.jetbrains.kotlin.backend.konan.isObjCMetaClass
 import org.jetbrains.kotlin.builtins.UnsignedType
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -635,8 +634,9 @@ private fun KotlinStubs.getNamedCStructType(kotlinClass: IrClass): CType? {
 }
 
 // TODO: rework Boolean support.
+// TODO: What should be used on watchOS?
 private fun cBoolType(target: KonanTarget): CType? = when (target.family) {
-    Family.IOS -> CTypes.C99Bool
+    Family.IOS, Family.TVOS -> CTypes.C99Bool
     else -> CTypes.signedChar
 }
 
@@ -810,7 +810,7 @@ private fun KotlinStubs.mapType(
 }
 
 private fun KotlinStubs.isObjCReferenceType(type: IrType): Boolean {
-    if (!target.isAppleTarget) return false
+    if (!target.family.isAppleFamily) return false
 
     // Handle the same types as produced by [objCPointerMirror] in Interop/StubGenerator/.../Mappings.kt.
 

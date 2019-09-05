@@ -40,7 +40,7 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
     private val codeSpec = exportedInterface?.createCodeSpec(symbolTable)
 
     private fun produceInterface(): ObjCExportedInterface? {
-        if (!target.isAppleTarget) return null
+        if (!target.family.isAppleFamily) return null
 
         if (!context.config.produce.isNativeBinary) return null // TODO: emit RTTI to the same modules as classes belong to.
 
@@ -67,7 +67,7 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
     }
 
     internal fun generate(codegen: CodeGenerator) {
-        if (!target.isAppleTarget) return
+        if (!target.family.isAppleFamily) return
 
         if (!context.config.produce.isNativeBinary) return // TODO: emit RTTI to the same modules as classes belong to.
 
@@ -96,7 +96,9 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
     private fun produceFrameworkSpecific(headerLines: List<String>) {
         val framework = File(context.config.outputFile)
         val frameworkContents = when(target.family) {
-            Family.IOS -> framework
+            Family.IOS,
+            Family.WATCHOS,
+            Family.TVOS -> framework
             Family.OSX -> framework.child("Versions/A")
             else -> error(target)
         }
@@ -135,7 +137,9 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
 
     private fun emitInfoPlist(frameworkContents: File, name: String) {
         val directory = when (target.family) {
-            Family.IOS -> frameworkContents
+            Family.IOS,
+            Family.WATCHOS,
+            Family.TVOS -> frameworkContents
             Family.OSX -> frameworkContents.child("Resources").also { it.mkdirs() }
             else -> error(target)
         }
@@ -182,29 +186,32 @@ internal class ObjCExport(val context: Context, symbolTable: SymbolTable) {
 
         """.trimIndent())
 
-        // 1 - iPhone
-        // 2 - iPad
-        // 3 - AppleTV
-        val uiDeviceFamilyValues = if (target.isTvOsBased) {
-            listOf(3)
-        } else {
-            listOf(1, 2)
-        }
-        contents.append(when (target.family) {
-            Family.IOS -> """
+        fun addUiDeviceFamilies(vararg values: Int) {
+            val xmlValues = values.joinToString(separator = "\n       ") {
+                "<integer>$it</integer>"
+            }
+            contents.append("""
                 |    <key>MinimumOSVersion</key>
                 |    <string>$minimumOsVersion</string>
                 |    <key>UIDeviceFamily</key>
                 |    <array>
-                ${uiDeviceFamilyValues.joinToString(separator = "\n") { 
-                "|       <integer>$it</integer>" 
-            }}
+                |       $xmlValues
                 |    </array>
-
                 """.trimMargin()
-            Family.OSX -> ""
-            else -> error(target)
-        })
+            )
+        }
+
+        // UIDeviceFamily mapping:
+        // 1 - iPhone
+        // 2 - iPad
+        // 3 - AppleTV
+        // 4 - Apple Watch
+        when (target.family) {
+            Family.IOS -> addUiDeviceFamilies(1, 2)
+            Family.TVOS -> addUiDeviceFamilies(3)
+            Family.WATCHOS -> addUiDeviceFamilies(4)
+            else -> {}
+        }
 
         if (target == KonanTarget.IOS_ARM64) {
             contents.append("""

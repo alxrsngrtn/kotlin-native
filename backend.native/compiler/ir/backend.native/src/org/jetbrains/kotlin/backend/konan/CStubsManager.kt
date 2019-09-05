@@ -22,7 +22,7 @@ class CStubsManager(private val target: KonanTarget) {
 
         val compilerOptions = mutableListOf<String>()
         val sourceFileExtension = when {
-            target.isAppleTarget -> {
+            target.family.isAppleFamily -> {
                 compilerOptions += "-fobjc-arc"
                 ".m" // TODO: consider managing C and Objective-C stubs separately.
             }

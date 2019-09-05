@@ -19,13 +19,6 @@ internal fun determineLinkerOutput(context: Context): LinkerOutputKind =
             else -> TODO("${context.config.produce} should not reach native linker stage")
         }
 
-// TODO: Move to a more appropriate place.
-internal val KonanTarget.isAppleTarget: Boolean
-        get() = family == Family.IOS || family == Family.OSX
-
-internal val KonanTarget.isTvOsBased: Boolean
-        get() = this == KonanTarget.TVOS_ARM64 || this == KonanTarget.TVOS_X64
-
 // TODO: We have a Linker.kt file in the shared module.
 internal class Linker(val context: Context) {
 
@@ -85,7 +78,9 @@ internal class Linker(val context: Context) {
             val framework = File(context.config.outputFile)
             val dylibName = framework.name.removeSuffix(".framework")
             val dylibRelativePath = when (target.family) {
-                Family.IOS -> dylibName
+                Family.IOS,
+                Family.TVOS,
+                Family.WATCHOS -> dylibName
                 Family.OSX -> "Versions/A/$dylibName"
                 else -> error(target)
             }

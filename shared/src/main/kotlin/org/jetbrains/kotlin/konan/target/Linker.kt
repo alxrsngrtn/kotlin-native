@@ -145,19 +145,19 @@ open class MacOSBasedLinker(targetProperties: AppleConfigurables)
     private val strip = "$absoluteTargetToolchain/usr/bin/strip"
     private val dsymutil = "$absoluteLlvmHome/bin/llvm-dsymutil"
 
+    private val KonanTarget.isSimulator: Boolean
+        get() = this == KonanTarget.TVOS_X64 || this == KonanTarget.IOS_X64 ||
+                this == KonanTarget.WATCHOS_X86 || this == KonanTarget.WATCHOS_X64
+
     private fun provideCompilerRtLibrary(libraryName: String): String? {
-        val prefix = when (target) {
-            KonanTarget.IOS_ARM32,
-            KonanTarget.IOS_ARM64,
-            KonanTarget.IOS_X64 -> "ios"
-            KonanTarget.WATCHOS_ARM64,
-            KonanTarget.WATCHOS_X64 -> "watchos"
-            KonanTarget.TVOS_ARM64,
-            KonanTarget.TVOS_X64 -> "tvos"
-            KonanTarget.MACOS_X64 -> "osx"
+        val prefix = when (target.family) {
+            Family.IOS -> "ios"
+            Family.WATCHOS -> "watchos"
+            Family.TVOS -> "tvos"
+            Family.OSX -> "osx"
             else -> error("Target $target is unsupported")
         }
-        val suffix = if (libraryName.isNotEmpty() && (target == KonanTarget.TVOS_X64 || target == KonanTarget.IOS_X64)) {
+        val suffix = if (libraryName.isNotEmpty() && target.isSimulator) {
             "sim"
         } else {
             ""
@@ -230,7 +230,9 @@ open class MacOSBasedLinker(targetProperties: AppleConfigurables)
     private fun rpath(dynamic: Boolean): List<String> = listOfNotNull(
             when (target.family) {
                 Family.OSX -> "@executable_path/../Frameworks"
-                Family.IOS -> "@executable_path/Frameworks"
+                Family.IOS,
+                Family.WATCHOS,
+                Family.TVOS -> "@executable_path/Frameworks"
                 else -> error(target)
             },
             "@loader_path/Frameworks".takeIf { dynamic }
@@ -460,8 +462,6 @@ fun linker(configurables: Configurables): LinkerFlags =
             KonanTarget.WATCHOS_ARM32 -> TODO("implement me")
             KonanTarget.WATCHOS_X64 -> TODO("implement me")
             KonanTarget.WATCHOS_X86 -> TODO("implement me")
-            KonanTarget.TVOS_ARM64 -> TODO("implement me")
-            KonanTarget.TVOS_X64 -> TODO("implement me")
             is KonanTarget.ZEPHYR ->
                 ZephyrLinker(configurables as ZephyrConfigurables)
         }

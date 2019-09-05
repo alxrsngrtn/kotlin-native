@@ -91,7 +91,7 @@ internal class CodeGenerator(override val context: Context) : ContextUtils {
         LLVMCreateLocation(LLVMGetModuleContext(context.llvmModule), locationInfo.line, locationInfo.column, locationInfo.scope)
 
     val objCDataGenerator = when {
-        context.config.target.isAppleTarget -> ObjCDataGenerator(this)
+        context.config.target.family.isAppleFamily -> ObjCDataGenerator(this)
         else -> null
     }
 
